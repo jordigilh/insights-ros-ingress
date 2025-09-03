@@ -1,0 +1,238 @@
+# Default values for insights-ros-ingress
+# This is a YAML-formatted file.
+
+# Application configuration
+app:
+  name: insights-ros-ingress
+  version: "1.0.0"
+
+# Container image configuration
+image:
+  repository: quay.io/redhat-insights/insights-ros-ingress
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Replica configuration
+replicaCount: 2
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+# OpenShift Route configuration
+route:
+  enabled: true
+  host: ""  # Will be auto-generated if empty
+  path: "/"
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  annotations:
+    haproxy.router.openshift.io/timeout: "300s"
+
+# Ingress configuration (alternative to Route for non-OpenShift)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: insights-ros-ingress.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Server configuration
+server:
+  port: 8080
+  readTimeout: 30
+  writeTimeout: 30
+  idleTimeout: 120
+  debug: false
+
+# Storage configuration (MinIO)
+storage:
+  endpoint: "minio.minio.svc.cluster.local:9000"
+  region: "us-east-1"
+  bucket: "insights-ros-data"
+  useSSL: false
+  urlExpiration: 172800  # 48 hours in seconds
+  pathPrefix: "ros"
+  # Credentials will be loaded from secrets
+  existingSecret: "minio-credentials"
+  accessKeyKey: "access-key"
+  secretKeyKey: "secret-key"
+
+# Kafka configuration
+kafka:
+  brokers:
+    - "kafka.kafka.svc.cluster.local:9092"
+  topic: "hccm.ros.events"
+  securityProtocol: "PLAINTEXT"
+  clientId: "insights-ros-ingress"
+  batchSize: 16384
+  retries: 3
+  # Security configuration (if needed)
+  security:
+    enabled: false
+    saslMechanism: ""
+    saslUsername: ""
+    saslPassword: ""
+    sslCaLocation: ""
+    existingSecret: ""
+
+# Upload configuration
+upload:
+  maxUploadSize: 104857600  # 100MB
+  maxMemory: 33554432       # 32MB
+  tempDir: "/tmp"
+  allowedTypes:
+    - "application/vnd.redhat.hccm.upload"
+  requireAuth: true
+
+# Authentication configuration
+auth:
+  enabled: true
+  allowedOrgs: []
+  # JWT secret will be loaded from secret
+  existingSecret: "auth-credentials"
+  jwtSecretKey: "jwt-secret"
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+# Metrics configuration
+metrics:
+  enabled: true
+  path: "/metrics"
+  port: 8080
+
+# Resource configuration
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Auto-scaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Pod configuration
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1001
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# RBAC
+rbac:
+  create: true
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Monitoring (ServiceMonitor for Prometheus)
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    annotations: {}
+
+# Volume configuration
+volumes:
+  - name: tmp
+    emptyDir: {}
+
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
+# Environment variables
+env: []
+# Example:
+# env:
+#   - name: CUSTOM_VAR
+#     value: "custom-value"
+
+# Additional environment variables from secrets/configmaps
+envFrom: []
+# Example:
+# envFrom:
+#   - secretRef:
+#       name: app-secrets
+#   - configMapRef:
+#       name: app-config
+
+# Additional labels for all resources
+commonLabels: {}
+
+# Additional annotations for all resources
+commonAnnotations: {}

@@ -1,0 +1,120 @@
+# Configuration for golangci-lint
+# See: https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  go: "1.21"
+  skip-dirs:
+    - vendor
+    - build
+    - scripts
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters-settings:
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/RedHatInsights/insights-ros-ingress
+
+  golint:
+    min-confidence: 0.8
+
+  gocyclo:
+    min-complexity: 15
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  lll:
+    line-length: 120
+
+  gocritic:
+    enabled-tags:
+      - performance
+      - style
+      - experimental
+    disabled-checks:
+      - whyNoLint
+      - wrapperFunc
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - golint
+    - gocyclo
+    - goconst
+    - misspell
+    - lll
+    - gocritic
+    - gofumpt
+    - gosec
+    - unconvert
+    - unparam
+    - asciicheck
+    - bodyclose
+    - dogsled
+    - dupl
+    - exportloopref
+    - gci
+    - gocognit
+    - godot
+    - godox
+    - goerr113
+    - gomnd
+    - gomodguard
+    - goprintffuncname
+    - nolintlint
+    - prealloc
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tparallel
+    - whitespace
+    - wsl
+
+  disable:
+    - typecheck  # Sometimes causes issues with CGO
+    - deadcode   # Deprecated
+    - varcheck   # Deprecated
+    - structcheck # Deprecated
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+        - gomnd
+
+    # Exclude certain golint issues
+    - linters:
+        - golint
+      text: "should have comment"
+
+    # Exclude magic number warnings for common values
+    - linters:
+        - gomnd
+      text: "Magic number: (8080|9092|9000|5432|6379)"
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RedHatInsights/insights-ros-ingress/internal/auth"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/config"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/health"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/logger"
@@ -18,6 +19,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
+
+// contextKey is a custom type for context keys to avoid collisions
 
 func main() {
 	// Initialize logger
@@ -57,19 +60,24 @@ func main() {
 	// Setup HTTP routes
 	router := mux.NewRouter()
 
+	// For now we focus only on authentication, we will add authorization later
+	authMiddleware := auth.KubernetesAuthMiddleware(log)
 	// API routes
 	apiRouter := router.PathPrefix("/api/ingress/v1").Subrouter()
 	apiRouter.HandleFunc("/upload", uploadHandler.HandleUpload).Methods("POST")
+	apiRouter.Use(authMiddleware)
 
 	// Health and observability routes
 	router.HandleFunc("/health", healthChecker.Health).Methods("GET")
 	router.HandleFunc("/ready", healthChecker.Ready).Methods("GET")
-	router.HandleFunc("/metrics", healthChecker.Metrics).Methods("GET")
+
+	// Metrics endpoint with authentication
+	router.Handle("/metrics", authMiddleware(http.HandlerFunc(healthChecker.Metrics))).Methods("GET")
 
 	// Create HTTP server
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: router,
+		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:      router,
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,

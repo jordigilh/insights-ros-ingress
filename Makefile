@@ -27,7 +27,7 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: clean
-clean: ## Clean build artifacts
+clean: clean-mocks ## Clean build artifacts
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
 	podman rmi $(IMAGE_NAME) 2>/dev/null || true
@@ -56,7 +56,7 @@ vet: ## Run go vet
 	go vet ./...
 
 .PHONY: test
-test: ## Run tests
+test: mocks ## Run tests
 	@echo "Running tests..."
 	go test -v -race -coverprofile=coverage.out ./...
 
@@ -65,6 +65,24 @@ test-coverage: test ## Run tests and generate coverage report
 	@echo "Generating coverage report..."
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+
+.PHONY: mocks
+mocks: install-tools ## Generate mocks for testing
+	@echo "Ensuring mocks exist..."
+	@mkdir -p internal/auth/mocks
+	@if [ ! -f internal/auth/mocks/mock_auth_client.go ]; then \
+		echo "Generating mocks with go generate..."; \
+		cd internal/auth/mocks/ && \
+		GOMOD=$$(pwd)/../../../go.mod go generate -mod=mod ./generate.go  || \
+		echo "Mocks already present or generation failed - using existing mocks"; \
+	fi
+	@echo "Mocks ready in internal/auth/mocks/"
+
+.PHONY: clean-mocks
+clean-mocks: ## Remove generated mocks
+	@echo "Cleaning generated mocks..."
+	rm -f internal/auth/mocks/mock_auth_client.go
+	@echo "Mocks cleaned"
 
 .PHONY: build
 build: clean deps ## Build the binary
@@ -117,6 +135,10 @@ install-tools: ## Install required development tools
 	@command -v goimports >/dev/null 2>&1 || { \
 		echo "Installing goimports..."; \
 		go install golang.org/x/tools/cmd/goimports@latest; \
+	}
+	@command -v mockgen >/dev/null 2>&1 || { \
+		echo "Installing mockgen..."; \
+		go install github.com/golang/mock/mockgen@latest; \
 	}
 
 .PHONY: helm-lint

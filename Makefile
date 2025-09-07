@@ -120,6 +120,16 @@ run: build ## Run the application locally
 	@echo "Running $(APP_NAME)..."
 	./$(BIN_DIR)/$(APP_NAME)
 
+.PHONY: run-test
+run-test: build ## Run the application locally with test configuration
+	@echo "Running $(APP_NAME) with test configuration..."
+	@if [ -f configs/local-test.env ]; then \
+		export $$(cat configs/local-test.env | grep -v '^#' | xargs) && ./$(BIN_DIR)/$(APP_NAME); \
+	else \
+		echo "Test configuration not found. Run: make test-env-up first"; \
+		exit 1; \
+	fi
+
 .PHONY: dev-env-up
 dev-env-up: ## Start development environment with podman-compose
 	@echo "Starting development environment..."
@@ -133,6 +143,47 @@ dev-env-down: ## Stop development environment
 .PHONY: dev-env-logs
 dev-env-logs: ## Show development environment logs
 	podman-compose -f scripts/docker-compose.yml logs -f
+
+.PHONY: test-integration
+test-integration: ## Run end-to-end integration test
+	@echo "Running integration test..."
+	chmod +x scripts/test-integration.sh
+	./scripts/test-integration.sh
+
+.PHONY: test-integration-quick
+test-integration-quick: dev-env-up ## Quick integration test (assumes services are running)
+	@echo "Running quick integration test..."
+	@sleep 5
+	@export $$(cat configs/local-test.env | grep -v '^#' | xargs) && \
+		./build/bin/$(APP_NAME) &
+	@SERVICE_PID=$$! && \
+		sleep 3 && \
+		curl -X POST \
+			-H "Content-Type: application/octet-stream" \
+			-H "x-rh-identity: $$(echo '{"identity":{"account_number":"12345","org_id":"12345","type":"User"}}' | base64 -w 0)" \
+			--data-binary "@scripts/test-data/test-payload.tar.gz" \
+			"http://localhost:8080/api/ingress/v1/upload?request_id=test-$$(date +%s)" || true && \
+		kill $$SERVICE_PID
+
+.PHONY: test-data
+test-data: ## Create test data for integration testing
+	@echo "Creating test data..."
+	./scripts/create-test-data.sh
+
+.PHONY: verify-kafka
+verify-kafka: ## Verify Kafka messages and topics
+	@echo "Verifying Kafka setup..."
+	./scripts/verify-kafka.sh
+
+.PHONY: verify-minio
+verify-minio: ## Verify MinIO uploads and ROS data
+	@echo "Verifying MinIO setup..."
+	./scripts/verify-minio.sh
+
+.PHONY: monitor-kafka
+monitor-kafka: ## Monitor Kafka topics in real-time
+	@echo "Monitoring Kafka topics (press Ctrl+C to stop)..."
+	./scripts/verify-kafka.sh monitor
 
 .PHONY: install-tools
 install-tools: ## Install required development tools

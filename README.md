@@ -97,6 +97,39 @@ make lint
 - `GET /ready` - Readiness probe
 - `GET /metrics` - Prometheus metrics
 
+## Testing
+
+### Unit Tests
+```bash
+make test
+```
+
+### Integration Testing
+
+Complete end-to-end integration test with docker-compose services:
+
+```bash
+# Full integration test (recommended)
+make test-integration
+
+# Quick test with existing services
+make dev-env-up
+make test-integration-quick
+
+# Manual testing
+make dev-env-up
+make run-test  # In one terminal
+# Test upload API in another terminal
+```
+
+The integration test validates:
+- Docker-compose services (MinIO, Kafka, Zookeeper)
+- ROS data upload and processing
+- MinIO file storage and metadata
+- Kafka message publishing
+
+For detailed testing instructions, see [docs/testing.md](docs/testing.md).
+
 ## Contributing
 
 Please follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).

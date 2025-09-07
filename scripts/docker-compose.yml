@@ -81,12 +81,12 @@ services:
       - kafka
     command: >
       bash -c "
-      echo 'Waiting for Kafka to be ready...'
-      sleep 30
-      echo 'Creating Kafka topics...'
-      bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic hccm.ros.events
-      bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic platform.upload.validation
-      echo 'Kafka topics created successfully'
+      echo 'Waiting for Kafka to be ready...';
+      sleep 45;
+      echo 'Creating Kafka topics...';
+      bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic hccm.ros.events;
+      bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic platform.upload.validation;
+      echo 'Kafka topics created successfully';
       "
 
   # PostgreSQL for testing (optional)

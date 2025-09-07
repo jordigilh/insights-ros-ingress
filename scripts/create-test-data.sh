@@ -17,9 +17,11 @@ TEMP_DIR=$(mktemp -d)
 # Create manifest.json with ROS files
 cat > "$TEMP_DIR/manifest.json" << 'EOF'
 {
+    "uuid": "test-uuid-123e4567-e89b-12d3-a456-426614174000",
     "version": "1.0",
     "cluster_id": "test-cluster-123",
     "cluster_alias": "test-cluster",
+    "date": "2024-01-01T00:00:00Z",
     "source_metadata": {
         "any": {
             "cluster_version": "4.14.0",
@@ -106,24 +108,24 @@ data:
   platform: openshift
 EOF
 
-# Create tar.gz archive
+# Create tar.gz archive (exclude macOS metadata files)
 echo "Creating test payload archive..."
-(cd "$TEMP_DIR" && tar -czf "$TEST_DATA_DIR/test-payload.tar.gz" .)
+(cd "$TEMP_DIR" && COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='.DS_Store' -czf "$TEST_DATA_DIR/test-payload.tar.gz" .)
 
 # Create a simpler payload for quick tests
 echo "Creating simple test payload..."
 mkdir -p "$TEMP_DIR/simple"
-echo '{"files":["simple.csv"],"resource_optimization_files":["simple.csv"]}' > "$TEMP_DIR/simple/manifest.json"
+echo '{"uuid":"simple-test-uuid","cluster_id":"simple-cluster","date":"2024-01-01T00:00:00Z","files":["simple.csv"],"resource_optimization_files":["simple.csv"]}' > "$TEMP_DIR/simple/manifest.json"
 echo "date,pod,cpu,memory" > "$TEMP_DIR/simple/simple.csv"
 echo "2024-01-01,test-pod,100m,128Mi" >> "$TEMP_DIR/simple/simple.csv"
-(cd "$TEMP_DIR/simple" && tar -czf "$TEST_DATA_DIR/simple-payload.tar.gz" .)
+(cd "$TEMP_DIR/simple" && COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='.DS_Store' -czf "$TEST_DATA_DIR/simple-payload.tar.gz" .)
 
 # Create an invalid payload (no ROS files)
 echo "Creating invalid test payload..."
 mkdir -p "$TEMP_DIR/invalid"
 echo '{"files":["data.txt"]}' > "$TEMP_DIR/invalid/manifest.json"
 echo "This is not a ROS file" > "$TEMP_DIR/invalid/data.txt"
-(cd "$TEMP_DIR/invalid" && tar -czf "$TEST_DATA_DIR/invalid-payload.tar.gz" .)
+(cd "$TEMP_DIR/invalid" && COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='.DS_Store' -czf "$TEST_DATA_DIR/invalid-payload.tar.gz" .)
 
 # Cleanup temp directory
 rm -rf "$TEMP_DIR"

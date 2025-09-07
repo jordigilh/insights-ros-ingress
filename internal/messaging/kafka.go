@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/RedHatInsights/insights-ros-ingress/internal/config"
@@ -50,14 +51,14 @@ type ValidationMessage struct {
 func NewKafkaProducer(cfg config.KafkaConfig) (*Producer, error) {
 	// Configure Kafka producer
 	kafkaConfig := kafka.ConfigMap{
-		"bootstrap.servers": fmt.Sprintf("%v", cfg.Brokers),
+		"bootstrap.servers": strings.Join(cfg.Brokers, ","),
 		"client.id":         cfg.ClientID,
 		"acks":              "all",
 		"retries":           cfg.Retries,
 		"batch.size":        cfg.BatchSize,
 		"linger.ms":         5,
 		"compression.type":  "snappy",
-		"idempotent":        true,
+		"enable.idempotence": true,
 	}
 
 	// Add security configuration if specified

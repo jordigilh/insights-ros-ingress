@@ -179,10 +179,10 @@ func (pe *PayloadExtractor) extractTarGz(data io.Reader, destDir string) ([]stri
 
 // findAndParseManifest finds and parses the manifest.json file
 func (pe *PayloadExtractor) findAndParseManifest(extractedFiles []string, extractDir string) (*Manifest, error) {
-	// Find manifest.json
+	// Find manifest.json (exact match, not substring)
 	var manifestPath string
 	for _, file := range extractedFiles {
-		if strings.Contains(file, "manifest.json") {
+		if filepath.Base(file) == "manifest.json" {
 			manifestPath = filepath.Join(extractDir, file)
 			break
 		}

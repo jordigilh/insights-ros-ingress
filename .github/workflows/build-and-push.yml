@@ -25,7 +25,7 @@ on:
 
 env:
   REGISTRY: quay.io
-  IMAGE_NAME: insights-ros-ingress
+  IMAGE_NAME: insights-onprem/insights-ros-ingress
 
 jobs:
   build-and-push:

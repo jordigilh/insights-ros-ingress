@@ -1,0 +1,339 @@
+name: Helm Chart Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'deployments/kubernetes/helm/**'
+      - 'deployments/kubernetes/scripts/**'
+      - '.github/workflows/helm-test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'deployments/kubernetes/helm/**'
+      - 'deployments/kubernetes/scripts/**'
+      - '.github/workflows/helm-test.yml'
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Enable debug mode'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  KIND_CLUSTER_NAME: insights-ros-ingress-ci
+  HELM_RELEASE_NAME: insights-ros-ingress-test
+  NAMESPACE: insights-ros-ingress-test
+  REGISTRY: quay.io
+  IMAGE_NAME: insights-onprem/insights-ros-ingress
+
+jobs:
+  lint-helm-chart:
+    name: Lint Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.13.0'
+
+      - name: Add helm repos
+        run: |
+          helm repo add stable https://charts.helm.sh/stable
+          helm repo update
+
+      - name: Lint Helm chart
+        run: |
+          helm lint deployments/kubernetes/helm/insights-ros-ingress
+
+      - name: Validate Helm chart templates
+        run: |
+          helm template test-release deployments/kubernetes/helm/insights-ros-ingress \
+            --namespace test-namespace \
+            --debug \
+            --dry-run
+
+  build-and-test:
+    name: Build and Test on KIND
+    runs-on: ubuntu-latest
+    needs: lint-helm-chart
+    strategy:
+      matrix:
+        k8s-version: ['v1.28.0', 'v1.29.0', 'v1.30.0']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up KIND
+        uses: helm/kind-action@v1.8.0
+        with:
+          version: v0.20.0
+          kubectl_version: ${{ matrix.k8s-version }}
+          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            name: ${{ env.KIND_CLUSTER_NAME }}
+            nodes:
+            - role: control-plane
+              kubeadmConfigPatches:
+              - |
+                kind: InitConfiguration
+                nodeRegistration:
+                  kubeletExtraArgs:
+                    node-labels: "ingress-ready=true"
+              extraPortMappings:
+              - containerPort: 80
+                hostPort: 80
+                protocol: TCP
+              - containerPort: 443
+                hostPort: 443
+                protocol: TCP
+              - containerPort: 30080
+                hostPort: 30080
+                protocol: TCP
+              - containerPort: 30090
+                hostPort: 30090
+                protocol: TCP
+              - containerPort: 30091
+                hostPort: 30091
+                protocol: TCP
+              - containerPort: 30099
+                hostPort: 30099
+                protocol: TCP
+            - role: worker
+            - role: worker
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.13.0'
+
+      - name: Build Go application
+        run: |
+          echo "Building insights-ros-ingress application..."
+          make build
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
+
+      - name: Build Docker image
+        run: |
+          echo "Building Docker image..."
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+
+      - name: Load Docker image to KIND
+        run: |
+          echo "Loading Docker image to KIND cluster..."
+          kind load docker-image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --name ${{ env.KIND_CLUSTER_NAME }}
+
+      - name: Install NGINX Ingress Controller
+        run: |
+          echo "Installing NGINX Ingress Controller..."
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+          
+          echo "Waiting for NGINX Ingress Controller to be ready..."
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=300s
+
+      - name: Set up storage class
+        run: |
+          echo "Setting up default storage class..."
+          kubectl patch storageclass standard -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+
+      - name: Deploy Helm chart
+        run: |
+          echo "Deploying Helm chart..."
+          helm upgrade --install ${{ env.HELM_RELEASE_NAME }} deployments/kubernetes/helm/insights-ros-ingress \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set global.storageClass="standard" \
+            --set image.repository="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" \
+            --set image.tag="latest" \
+            --set image.pullPolicy="Never" \
+            --set route.enabled=false \
+            --set ingress.enabled=true \
+            --set ingress.hosts[0].host="insights-ros-ingress.local" \
+            --set minio.enabled=true \
+            --set kafkaDependency.enabled=true \
+            --set zookeeper.enabled=true \
+            --set redis.enabled=true \
+            --set replicaCount=1 \
+            --timeout=600s \
+            --wait
+
+      - name: Check deployment status
+        run: |
+          echo "Checking deployment status..."
+          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          kubectl get services -n ${{ env.NAMESPACE }}
+          kubectl get pvc -n ${{ env.NAMESPACE }}
+
+      - name: Wait for pods to be ready
+        run: |
+          echo "Waiting for pods to be ready..."
+          kubectl wait --for=condition=ready pod \
+            -l "app.kubernetes.io/instance=${{ env.HELM_RELEASE_NAME }}" \
+            --namespace ${{ env.NAMESPACE }} \
+            --timeout=600s \
+            --field-selector=status.phase!=Succeeded
+
+      - name: Create NodePort services for testing
+        run: |
+          echo "Creating NodePort services for testing..."
+          
+          # Insights ROS Ingress service
+          kubectl patch service ${{ env.HELM_RELEASE_NAME }} -n ${{ env.NAMESPACE }} \
+            -p '{"spec":{"type":"NodePort","ports":[{"port":8080,"nodePort":30080,"targetPort":"http","protocol":"TCP","name":"http"}]}}'
+          
+          # MinIO service
+          kubectl patch service ${{ env.HELM_RELEASE_NAME }}-minio -n ${{ env.NAMESPACE }} \
+            --type='json' \
+            -p='[
+              {"op": "replace", "path": "/spec/type", "value": "NodePort"},
+              {"op": "add", "path": "/spec/ports/0/nodePort", "value": 30091},
+              {"op": "add", "path": "/spec/ports/1/nodePort", "value": 30099}
+            ]'
+
+      - name: Wait for services to stabilize
+        run: |
+          echo "Waiting for services to stabilize..."
+          sleep 30
+
+      - name: Run health checks
+        run: |
+          echo "Running health checks..."
+          
+          # Check health endpoint
+          echo "Testing health endpoint..."
+          if curl -f -s http://localhost:30080/health; then
+            echo "✓ Health endpoint is accessible"
+          else
+            echo "✗ Health endpoint is not accessible"
+            exit 1
+          fi
+          
+          # Check readiness endpoint
+          echo "Testing readiness endpoint..."
+          if curl -f -s http://localhost:30080/ready; then
+            echo "✓ Readiness endpoint is accessible"
+          else
+            echo "✗ Readiness endpoint is not accessible"
+            exit 1
+          fi
+          
+          # Check MinIO
+          echo "Testing MinIO..."
+          if curl -f -s http://localhost:30099/; then
+            echo "✓ MinIO console is accessible"
+          else
+            echo "✗ MinIO console is not accessible"
+            exit 1
+          fi
+
+      - name: Run dataflow test
+        run: |
+          echo "Running dataflow test..."
+          chmod +x deployments/kubernetes/scripts/test-k8s-dataflow.sh
+          
+          export NAMESPACE=${{ env.NAMESPACE }}
+          export HELM_RELEASE_NAME=${{ env.HELM_RELEASE_NAME }}
+          
+          ./deployments/kubernetes/scripts/test-k8s-dataflow.sh
+
+      - name: Debug on failure
+        if: failure() && github.event.inputs.debug == 'true'
+        run: |
+          echo "=== Debug Information ==="
+          echo "Pods in namespace ${{ env.NAMESPACE }}:"
+          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          
+          echo "=== Pod Logs ==="
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -o name); do
+            echo "--- Logs for $pod ---"
+            kubectl logs -n ${{ env.NAMESPACE }} $pod --tail=50 || true
+          done
+          
+          echo "=== Events ==="
+          kubectl get events -n ${{ env.NAMESPACE }} --sort-by='.lastTimestamp'
+          
+          echo "=== Services ==="
+          kubectl get services -n ${{ env.NAMESPACE }} -o wide
+          
+          echo "=== PVCs ==="
+          kubectl get pvc -n ${{ env.NAMESPACE }}
+
+      - name: Clean up
+        if: always()
+        run: |
+          echo "Cleaning up resources..."
+          helm uninstall ${{ env.HELM_RELEASE_NAME }} -n ${{ env.NAMESPACE }} || true
+          kubectl delete namespace ${{ env.NAMESPACE }} || true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint-helm-chart
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov on Helm templates
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: deployments/kubernetes/helm/insights-ros-ingress/templates
+          framework: kubernetes
+          soft_fail: true
+          output_format: sarif
+          output_file_path: reports/checkov.sarif
+
+      - name: Upload Checkov results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/checkov.sarif
+
+  helm-package:
+    name: Package Helm Chart
+    runs-on: ubuntu-latest
+    needs: [lint-helm-chart, build-and-test]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.13.0'
+
+      - name: Package Helm chart
+        run: |
+          echo "Packaging Helm chart..."
+          helm package deployments/kubernetes/helm/insights-ros-ingress \
+            --destination ./helm-packages
+
+      - name: Upload Helm package as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart-package
+          path: helm-packages/*.tgz
+          retention-days: 30

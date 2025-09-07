@@ -19,7 +19,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-insights-ros-ingress.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -46,6 +46,9 @@ spec:
             - name: http
               containerPort: {{ .Values.server.port }}
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "insights-ros-ingress.fullname" . }}-app
           env:
             # Server configuration
             - name: SERVER_PORT
@@ -61,9 +64,7 @@ spec:
 
             # Storage configuration
             - name: STORAGE_ENDPOINT
-              value: {{ .Values.storage.endpoint | quote }}
-            - name: STORAGE_REGION
-              value: {{ .Values.storage.region | quote }}
+              value: {{ include "insights-ros-ingress.fullname" . }}-minio:{{ .Values.minio.ports.api }}
             - name: STORAGE_BUCKET
               value: {{ .Values.storage.bucket | quote }}
             - name: STORAGE_USE_SSL
@@ -158,6 +159,21 @@ spec:
             - name: METRICS_PORT
               value: {{ .Values.metrics.port | quote }}
 
+            # Database configuration
+            - name: DB_HOST
+              value: {{ include "insights-ros-ingress.fullname" . }}-postgresql
+            - name: DB_PORT
+              value: {{ .Values.database.insights.port | quote }}
+            - name: DB_NAME
+              value: {{ .Values.database.insights.name | quote }}
+            - name: DB_USER
+              value: {{ .Values.database.insights.username | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "insights-ros-ingress.fullname" . }}-db-credentials
+                  key: insights-password
+
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -170,11 +186,15 @@ spec:
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources.application | nindent 12 }}
+          {{- with .Values.volumeMounts }}
           volumeMounts:
-            {{- toYaml .Values.volumeMounts | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.volumes }}
       volumes:
-        {{- toYaml .Values.volumes | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -5,15 +5,13 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "insights-ros-ingress.labels" . | nindent 4 }}
-  {{- with .Values.service.annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    app.kubernetes.io/component: api
+    app.kubernetes.io/name: insights-ros-ingress
 spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: {{ .Values.service.targetPort }}
+      targetPort: http
       protocol: TCP
       name: http
   selector:

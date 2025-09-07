@@ -5,7 +5,7 @@
 APP_NAME := insights-ros-ingress
 VERSION ?= latest
 IMAGE_NAME := $(APP_NAME):$(VERSION)
-REGISTRY ?= quay.io/redhat-insights
+REGISTRY ?= quay.io/insights-onprem
 
 # Go variables
 GO_VERSION := 1.21
@@ -103,10 +103,11 @@ else
 endif
 	@echo "Binary built: $(BIN_DIR)/$(APP_NAME)"
 
+
 .PHONY: image
 image: ## Build container image using podman
 	@echo "Building container image with podman..."
-	podman build -t $(IMAGE_NAME) .
+	podman build --platform=linux/amd64 -t $(IMAGE_NAME) .
 	@echo "Image built: $(IMAGE_NAME)"
 
 .PHONY: image-push

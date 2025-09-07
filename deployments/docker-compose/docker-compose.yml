@@ -102,14 +102,6 @@ services:
     volumes:
       - postgres_data:/var/lib/pgsql/data
 
-  # Redis for caching (optional)
-  redis:
-    image: registry.redhat.io/rhel8/redis-6:latest
-    container_name: insights-ros-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/var/lib/redis/data
 
 volumes:
   minio_data:
@@ -119,8 +111,6 @@ volumes:
   kafka_data:
     driver: local
   postgres_data:
-    driver: local
-  redis_data:
     driver: local
 
 networks:

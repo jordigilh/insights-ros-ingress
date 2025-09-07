@@ -63,10 +63,10 @@ func main() {
 	// For now we focus only on authentication, we will add authorization later
 	authMiddleware := auth.KubernetesAuthMiddleware(log)
 	// API routes
-	apiRouter := router.Route("/api/ingress/v1", func(r chi.Router) {
+	router.Route("/api/ingress/v1", func(r chi.Router) {
+		r.Use(authMiddleware)
 		r.Post("/upload", uploadHandler.HandleUpload)
 	})
-	apiRouter.Use(authMiddleware)
 
 	// Health and observability routes
 	router.Get("/health", healthChecker.Health)

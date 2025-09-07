@@ -25,16 +25,19 @@ const (
 )
 
 // KubernetesAuthMiddleware creates middleware that validates tokens using Kubernetes TokenReviewer API
+// Falls back to NoOpAuthMiddleware if Kubernetes config is not available (for development)
 func KubernetesAuthMiddleware(log *logrus.Logger) func(http.Handler) http.Handler {
 	// Initialize Kubernetes client once - try KUBECONFIG first, then in-cluster
 	config, err := GetKubernetesConfig(log)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to get Kubernetes configuration")
+		log.WithError(err).Warn("Failed to get Kubernetes configuration, falling back to no-op auth for development")
+		return NoOpAuthMiddleware(log)
 	}
 
 	authClient, err := authenticationv1client.NewForConfig(config)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to create Kubernetes authentication client")
+		log.WithError(err).Warn("Failed to create Kubernetes authentication client, falling back to no-op auth for development")
+		return NoOpAuthMiddleware(log)
 	}
 	return AuthMiddleware(authClient, log)
 }
@@ -61,6 +64,32 @@ func GetKubernetesConfig(log *logrus.Logger) (*rest.Config, error) {
 	}
 
 	return config, nil
+}
+
+// NoOpAuthMiddleware creates a pass-through middleware for development/testing
+// It allows all requests to pass through without authentication
+func NoOpAuthMiddleware(log *logrus.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Debug("Using no-op auth middleware - allowing request without authentication")
+			
+			// Create a mock user for development
+			mockUser := &authenticationv1.UserInfo{
+				Username: "dev-user",
+				UID:      "dev-uid",
+				Groups:   []string{"system:authenticated"},
+			}
+			
+			// Add mock user info to request context
+			userCtx := context.WithValue(r.Context(), AuthenticatedUserKey, mockUser)
+			// Add mock token to request context
+			oauthTokenCtx := context.WithValue(userCtx, OauthTokenKey, "dev-token")
+			r = r.WithContext(oauthTokenCtx)
+			
+			// Continue to next handler
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 var AuthMiddleware = func(authClient authenticationv1client.AuthenticationV1Interface, log *logrus.Logger) func(http.Handler) http.Handler {

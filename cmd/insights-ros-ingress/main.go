@@ -16,7 +16,7 @@ import (
 	"github.com/RedHatInsights/insights-ros-ingress/internal/messaging"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/storage"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/upload"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 )
 
@@ -63,14 +63,15 @@ func main() {
 	// For now we focus only on authentication, we will add authorization later
 	authMiddleware := auth.KubernetesAuthMiddleware(log)
 	// API routes
-	router.Route("/api/ingress/v1", func(r chi.Router) {
+	apiRouter := router.Route("/api/ingress/v1", func(r chi.Router) {
 		r.Post("/upload", uploadHandler.HandleUpload)
 	})
+	apiRouter.Use(authMiddleware)
 
 	// Health and observability routes
 	router.Get("/health", healthChecker.Health)
 	router.Get("/ready", healthChecker.Ready)
-	router.Get("/metrics", healthChecker.Metrics)
+	router.With(authMiddleware).Get("/metrics", healthChecker.Metrics)
 
 	// Create HTTP server
 	server := &http.Server{

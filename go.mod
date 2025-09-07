@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/confluentinc/confluent-kafka-go/v2 v2.11.0
-	github.com/go-chi/chi v4.1.2+incompatible
+	github.com/go-chi/chi/v5 v5.0.12
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/minio/minio-go/v6 v6.0.57

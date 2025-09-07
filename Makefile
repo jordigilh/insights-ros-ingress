@@ -11,7 +11,7 @@ REGISTRY ?= quay.io/redhat-insights
 GO_VERSION := 1.21
 GOOS ?= linux
 GOARCH ?= amd64
-CGO_ENABLED ?= 0
+CGO_ENABLED ?= 1
 
 # Build directories
 BUILD_DIR := build
@@ -19,7 +19,7 @@ BIN_DIR := $(BUILD_DIR)/bin
 
 # Go flags
 LDFLAGS := -w -s -X main.version=$(VERSION)
-GO_BUILD_FLAGS := -ldflags "$(LDFLAGS)" -a -installsuffix cgo
+GO_BUILD_FLAGS := -ldflags "$(LDFLAGS)"
 
 .PHONY: help
 help: ## Display this help message
@@ -88,10 +88,19 @@ clean-mocks: ## Remove generated mocks
 build: clean deps ## Build the binary
 	@echo "Building $(APP_NAME)..."
 	mkdir -p $(BIN_DIR)
+ifeq ($(CGO_ENABLED),1)
+	@echo "Building with CGO enabled for current platform..."
+	CGO_ENABLED=$(CGO_ENABLED) go build \
+		$(GO_BUILD_FLAGS) \
+		-o $(BIN_DIR)/$(APP_NAME) \
+		./cmd/$(APP_NAME)
+else
+	@echo "Building with CGO disabled for $(GOOS)/$(GOARCH)..."
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		$(GO_BUILD_FLAGS) \
 		-o $(BIN_DIR)/$(APP_NAME) \
 		./cmd/$(APP_NAME)
+endif
 	@echo "Binary built: $(BIN_DIR)/$(APP_NAME)"
 
 .PHONY: image

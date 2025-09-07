@@ -9,8 +9,7 @@ import (
 
 	"github.com/RedHatInsights/insights-ros-ingress/internal/config"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/health"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v6"
 	"github.com/sirupsen/logrus"
 )
 
@@ -42,11 +41,7 @@ type UploadResult struct {
 // NewMinIOClient creates a new MinIO client
 func NewMinIOClient(cfg config.StorageConfig) (*Client, error) {
 	// Initialize MinIO client
-	minioClient, err := minio.New(cfg.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
-		Secure: cfg.UseSSL,
-		Region: cfg.Region,
-	})
+	minioClient, err := minio.New(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.UseSSL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
 	}
@@ -58,18 +53,14 @@ func NewMinIOClient(cfg config.StorageConfig) (*Client, error) {
 	}
 
 	// Ensure bucket exists
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
-	exists, err := minioClient.BucketExists(ctx, cfg.Bucket)
+	exists, err := minioClient.BucketExists(cfg.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check bucket existence: %w", err)
 	}
 
 	if !exists {
-		err = minioClient.MakeBucket(ctx, cfg.Bucket, minio.MakeBucketOptions{
-			Region: cfg.Region,
-		})
+		err = minioClient.MakeBucket(cfg.Bucket, cfg.Region)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %w", err)
 		}
@@ -99,7 +90,7 @@ func (c *Client) Upload(ctx context.Context, req *UploadRequest) (*UploadResult,
 	}
 
 	// Upload to MinIO
-	uploadInfo, err := c.client.PutObject(ctx, c.config.Bucket, key, req.Data, req.Size, opts)
+	n, err := c.client.PutObject(c.config.Bucket, key, req.Data, req.Size, opts)
 	if err != nil {
 		health.StorageOperationsTotal.WithLabelValues("upload", "error").Inc()
 		return nil, fmt.Errorf("failed to upload to MinIO: %w", err)
@@ -117,14 +108,13 @@ func (c *Client) Upload(ctx context.Context, req *UploadRequest) (*UploadResult,
 		Key:          key,
 		URL:          fmt.Sprintf("%s/%s/%s", c.getEndpointURL(), c.config.Bucket, key),
 		PresignedURL: presignedURL,
-		Size:         uploadInfo.Size,
-		ETag:         uploadInfo.ETag,
+		Size:         n,
+		ETag:         "", // ETag not available in v6 PutObject response
 	}
 
 	c.logger.WithFields(logrus.Fields{
 		"key":  key,
-		"size": uploadInfo.Size,
-		"etag": uploadInfo.ETag,
+		"size": n,
 	}).Debug("Successfully uploaded file to MinIO")
 
 	return result, nil
@@ -138,7 +128,7 @@ func (c *Client) GeneratePresignedURL(ctx context.Context, key string) (string, 
 	}()
 
 	expiry := time.Duration(c.config.URLExpiration) * time.Second
-	url, err := c.client.PresignedGetObject(ctx, c.config.Bucket, key, expiry, nil)
+	url, err := c.client.PresignedGetObject(c.config.Bucket, key, expiry, nil)
 	if err != nil {
 		health.StorageOperationsTotal.WithLabelValues("presign", "error").Inc()
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
@@ -160,7 +150,7 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 		key = filepath.Join(c.config.PathPrefix, key)
 	}
 
-	err := c.client.RemoveObject(ctx, c.config.Bucket, key, minio.RemoveObjectOptions{})
+	err := c.client.RemoveObject(c.config.Bucket, key)
 	if err != nil {
 		health.StorageOperationsTotal.WithLabelValues("delete", "error").Inc()
 		return fmt.Errorf("failed to delete from MinIO: %w", err)
@@ -185,10 +175,9 @@ func (c *Client) List(ctx context.Context, prefix string) ([]string, error) {
 	}
 
 	var objects []string
-	objectCh := c.client.ListObjects(ctx, c.config.Bucket, minio.ListObjectsOptions{
-		Prefix:    prefix,
-		Recursive: true,
-	})
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	objectCh := c.client.ListObjects(c.config.Bucket, prefix, true, doneCh)
 
 	for object := range objectCh {
 		if object.Err != nil {
@@ -204,17 +193,14 @@ func (c *Client) List(ctx context.Context, prefix string) ([]string, error) {
 
 // HealthCheck performs a health check on the storage connection
 func (c *Client) HealthCheck() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	// Try to list buckets to verify connectivity
-	_, err := c.client.ListBuckets(ctx)
+	_, err := c.client.ListBuckets()
 	if err != nil {
 		return fmt.Errorf("MinIO health check failed: %w", err)
 	}
 
 	// Verify our bucket exists
-	exists, err := c.client.BucketExists(ctx, c.config.Bucket)
+	exists, err := c.client.BucketExists(c.config.Bucket)
 	if err != nil {
 		return fmt.Errorf("MinIO bucket check failed: %w", err)
 	}

@@ -8,7 +8,7 @@ import (
 
 	"github.com/RedHatInsights/insights-ros-ingress/internal/config"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/health"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,11 +22,11 @@ type Producer struct {
 // ROSMessage represents a ROS event message
 // Matches the structure used by koku's ROSReportShipper
 type ROSMessage struct {
-	RequestID   string            `json:"request_id"`
-	B64Identity string            `json:"b64_identity"`
-	Metadata    ROSMetadata       `json:"metadata"`
-	Files       []string          `json:"files"`
-	ObjectKeys  []string          `json:"object_keys"`
+	RequestID   string      `json:"request_id"`
+	B64Identity string      `json:"b64_identity"`
+	Metadata    ROSMetadata `json:"metadata"`
+	Files       []string    `json:"files"`
+	ObjectKeys  []string    `json:"object_keys"`
 }
 
 // ROSMetadata represents metadata for ROS events

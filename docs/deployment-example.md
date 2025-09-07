@@ -87,7 +87,7 @@ monitoring:
 ```bash
 # Deploy with Helm
 helm upgrade --install insights-ros-ingress \
-  ./deployments/helm/insights-ros-ingress \
+  ./deployments/kubernetes/helm/insights-ros-ingress \
   --values values-production.yaml \
   --namespace insights-ros
 ```
@@ -138,7 +138,7 @@ kind load docker-image insights-ros-ingress:latest --name insights-ros
 
 # Deploy with Helm
 helm upgrade --install insights-ros-ingress \
-  ./deployments/helm/insights-ros-ingress \
+  ./deployments/kubernetes/helm/insights-ros-ingress \
   --set image.tag=latest \
   --set image.pullPolicy=Never \
   --create-namespace \

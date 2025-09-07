@@ -162,17 +162,19 @@ invalid tar.gz uploads to help with debugging.
 ### Project Structure
 
 ```
-├── cmd/                    # Application entry points
-├── internal/               # Private application code
-│   ├── config/            # Configuration management
-│   ├── upload/            # Upload handling logic
-│   ├── storage/           # MinIO storage client
-│   ├── messaging/         # Kafka producer
-│   ├── logger/            # Logging utilities
-│   └── health/            # Health checks and metrics
-├── deployments/helm/      # Helm charts
-├── docs/                  # Documentation
-└── scripts/               # Development scripts
+├── cmd/                       # Application entry points
+├── internal/                  # Private application code
+│   ├── config/               # Configuration management
+│   ├── upload/               # Upload handling logic
+│   ├── storage/              # MinIO storage client
+│   ├── messaging/            # Kafka producer
+│   ├── logger/               # Logging utilities
+│   └── health/               # Health checks and metrics
+├── deployments/              # Deployment configurations
+│   ├── kubernetes/helm/      # Helm charts for Kubernetes/OpenShift
+│   └── docker-compose/       # Docker Compose for development
+├── docs/                     # Documentation
+└── configs/                  # Configuration files
 ```
 
 ### Adding New Features

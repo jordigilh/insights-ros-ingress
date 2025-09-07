@@ -28,7 +28,7 @@ HCCM Upload → insights-ros-ingress → MinIO (ROS bucket) → Kafka (ROS event
 
 ```bash
 # Start dependencies
-podman-compose -f scripts/docker-compose.yml up -d
+podman-compose -f deployments/docker-compose/docker-compose.yml up -d
 
 # Build and run
 make build
@@ -39,7 +39,7 @@ make run
 
 ```bash
 # Deploy with Helm
-helm install insights-ros-ingress ./deployments/helm/insights-ros-ingress
+helm install insights-ros-ingress ./deployments/kubernetes/helm/insights-ros-ingress
 ```
 
 ## Configuration
@@ -85,9 +85,11 @@ make lint
 │   ├── messaging/              # Kafka producer
 │   ├── logger/                 # Logging utilities
 │   └── health/                 # Health check endpoints
-├── deployments/helm/           # Helm charts for deployment
+├── deployments/                # Deployment configurations
+│   ├── kubernetes/helm/        # Helm charts for Kubernetes/OpenShift
+│   └── docker-compose/         # Docker Compose for development
 ├── docs/                       # Documentation
-└── scripts/                    # Development scripts
+└── configs/                    # Configuration files
 ```
 
 ## API Endpoints

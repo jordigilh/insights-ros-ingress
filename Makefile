@@ -133,22 +133,22 @@ run-test: build ## Run the application locally with test configuration
 .PHONY: dev-env-up
 dev-env-up: ## Start development environment with podman-compose
 	@echo "Starting development environment..."
-	podman-compose -f scripts/docker-compose.yml up -d
+	podman-compose -f deployments/docker-compose/docker-compose.yml up -d
 
 .PHONY: dev-env-down
 dev-env-down: ## Stop development environment
 	@echo "Stopping development environment..."
-	podman-compose -f scripts/docker-compose.yml down
+	podman-compose -f deployments/docker-compose/docker-compose.yml down
 
 .PHONY: dev-env-logs
 dev-env-logs: ## Show development environment logs
-	podman-compose -f scripts/docker-compose.yml logs -f
+	podman-compose -f deployments/docker-compose/docker-compose.yml logs -f
 
 .PHONY: test-integration
 test-integration: ## Run end-to-end integration test
 	@echo "Running integration test..."
-	chmod +x scripts/test-integration.sh
-	./scripts/test-integration.sh
+	chmod +x deployments/docker-compose/test-integration.sh
+	./deployments/docker-compose/test-integration.sh
 
 .PHONY: test-integration-quick
 test-integration-quick: dev-env-up ## Quick integration test (assumes services are running)
@@ -161,29 +161,29 @@ test-integration-quick: dev-env-up ## Quick integration test (assumes services a
 		curl -X POST \
 			-H "Content-Type: application/octet-stream" \
 			-H "x-rh-identity: $$(echo '{"identity":{"account_number":"12345","org_id":"12345","type":"User"}}' | base64 -w 0)" \
-			--data-binary "@scripts/test-data/test-payload.tar.gz" \
+			--data-binary "@deployments/docker-compose/test-data/test-payload.tar.gz" \
 			"http://localhost:8080/api/ingress/v1/upload?request_id=test-$$(date +%s)" || true && \
 		kill $$SERVICE_PID
 
 .PHONY: test-data
 test-data: ## Create test data for integration testing
 	@echo "Creating test data..."
-	./scripts/create-test-data.sh
+	./deployments/docker-compose/create-test-data.sh
 
 .PHONY: verify-kafka
 verify-kafka: ## Verify Kafka messages and topics
 	@echo "Verifying Kafka setup..."
-	./scripts/verify-kafka.sh
+	./deployments/docker-compose/verify-kafka.sh
 
 .PHONY: verify-minio
 verify-minio: ## Verify MinIO uploads and ROS data
 	@echo "Verifying MinIO setup..."
-	./scripts/verify-minio.sh
+	./deployments/docker-compose/verify-minio.sh
 
 .PHONY: monitor-kafka
 monitor-kafka: ## Monitor Kafka topics in real-time
 	@echo "Monitoring Kafka topics (press Ctrl+C to stop)..."
-	./scripts/verify-kafka.sh monitor
+	./deployments/docker-compose/verify-kafka.sh monitor
 
 .PHONY: install-tools
 install-tools: ## Install required development tools
@@ -204,17 +204,17 @@ install-tools: ## Install required development tools
 .PHONY: helm-lint
 helm-lint: ## Lint Helm chart
 	@echo "Linting Helm chart..."
-	helm lint deployments/helm/$(APP_NAME)
+	helm lint deployments/kubernetes/helm/$(APP_NAME)
 
 .PHONY: helm-template
 helm-template: ## Generate Helm templates
 	@echo "Generating Helm templates..."
-	helm template $(APP_NAME) deployments/helm/$(APP_NAME) --values deployments/helm/$(APP_NAME)/values.yaml
+	helm template $(APP_NAME) deployments/kubernetes/helm/$(APP_NAME) --values deployments/kubernetes/helm/$(APP_NAME)/values.yaml
 
 .PHONY: helm-package
 helm-package: helm-lint ## Package Helm chart
 	@echo "Packaging Helm chart..."
-	helm package deployments/helm/$(APP_NAME) -d $(BUILD_DIR)
+	helm package deployments/kubernetes/helm/$(APP_NAME) -d $(BUILD_DIR)
 
 .PHONY: security-scan
 security-scan: ## Run security scan on container image
@@ -253,7 +253,7 @@ debug: ## Build and run with debugging
 oc-deploy: image helm-package ## Deploy to OpenShift
 	@echo "Deploying to OpenShift..."
 	oc project insights-ros || oc new-project insights-ros
-	helm upgrade --install $(APP_NAME) deployments/helm/$(APP_NAME) \
+	helm upgrade --install $(APP_NAME) deployments/kubernetes/helm/$(APP_NAME) \
 		--set image.repository=$(REGISTRY)/$(APP_NAME) \
 		--set image.tag=$(VERSION)
 

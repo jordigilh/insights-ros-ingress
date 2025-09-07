@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 SERVICE_PORT=8080
 KAFKA_TOPIC="hccm.ros.events"

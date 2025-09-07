@@ -34,7 +34,7 @@ make run-test
 curl -X POST \
   -H "Content-Type: multipart/form-data" \
   -H "x-rh-identity: $(echo '{"identity":{"account_number":"12345","org_id":"12345","type":"User"}}' | base64 -w 0)" \
-  -F "upload=@scripts/test-data/test-payload.tar.gz" \
+  -F "upload=@deployments/docker-compose/test-data/test-payload.tar.gz" \
   "http://localhost:8080/api/ingress/v1/upload?request_id=test-$(date +%s)"
 
 # Verify results
@@ -94,7 +94,7 @@ The service uses test configuration from `configs/local-test.env`:
 
 ### Docker-Compose Services
 
-Services defined in `scripts/docker-compose.yml`:
+Services defined in `deployments/docker-compose/docker-compose.yml`:
 
 - **MinIO** (S3-compatible storage)
   - Console: http://localhost:9001
@@ -120,8 +120,8 @@ make verify-kafka
 make monitor-kafka
 
 # Individual topic consumption
-./scripts/verify-kafka.sh ros          # ROS events topic
-./scripts/verify-kafka.sh validation   # Validation topic
+./deployments/docker-compose/verify-kafka.sh ros          # ROS events topic
+./deployments/docker-compose/verify-kafka.sh validation   # Validation topic
 ```
 
 ### MinIO Verification
@@ -131,13 +131,13 @@ make monitor-kafka
 make verify-minio
 
 # List bucket contents
-./scripts/verify-minio.sh list
+./deployments/docker-compose/verify-minio.sh list
 
 # Search for files by request ID
-./scripts/verify-minio.sh search test-12345
+./deployments/docker-compose/verify-minio.sh search test-12345
 
 # Examine a specific file
-./scripts/verify-minio.sh examine ros/cost-management.csv
+./deployments/docker-compose/verify-minio.sh examine ros/cost-management.csv
 ```
 
 ## Test Scenarios
@@ -164,7 +164,7 @@ make verify-minio
 curl -X POST \
   -H "Content-Type: multipart/form-data" \
   -H "x-rh-identity: $(echo '{"identity":{"account_number":"12345","org_id":"12345","type":"User"}}' | base64 -w 0)" \
-  -F "upload=@scripts/test-data/invalid-payload.tar.gz" \
+  -F "upload=@deployments/docker-compose/test-data/invalid-payload.tar.gz" \
   "http://localhost:8080/api/ingress/v1/upload?request_id=invalid-test"
 ```
 
@@ -185,7 +185,7 @@ dd if=/dev/zero of=/tmp/large-file.csv bs=1M count=10
 ```bash
 curl -X POST \
   -H "Content-Type: multipart/form-data" \
-  -F "upload=@scripts/test-data/test-payload.tar.gz" \
+  -F "upload=@deployments/docker-compose/test-data/test-payload.tar.gz" \
   "http://localhost:8080/api/ingress/v1/upload"
 ```
 
@@ -210,11 +210,11 @@ curl http://localhost:8080/metrics
 
 ```bash
 # Check all services
-podman-compose -f scripts/docker-compose.yml ps
+podman-compose -f deployments/docker-compose/docker-compose.yml ps
 
 # Check service logs
-podman-compose -f scripts/docker-compose.yml logs minio
-podman-compose -f scripts/docker-compose.yml logs kafka
+podman-compose -f deployments/docker-compose/docker-compose.yml logs minio
+podman-compose -f deployments/docker-compose/docker-compose.yml logs kafka
 ```
 
 ## Troubleshooting
@@ -227,7 +227,7 @@ podman-compose -f scripts/docker-compose.yml logs kafka
 podman ps -a
 
 # Check logs
-podman-compose -f scripts/docker-compose.yml logs
+podman-compose -f deployments/docker-compose/docker-compose.yml logs
 
 # Restart services
 make dev-env-down && make dev-env-up
@@ -319,7 +319,7 @@ for i in {1..10}; do
   curl -X POST \
     -H "Content-Type: multipart/form-data" \
     -H "x-rh-identity: $(echo '{"identity":{"account_number":"12345","org_id":"12345","type":"User"}}' | base64 -w 0)" \
-    -F "upload=@scripts/test-data/test-payload.tar.gz" \
+    -F "upload=@deployments/docker-compose/test-data/test-payload.tar.gz" \
     "http://localhost:8080/api/ingress/v1/upload?request_id=load-test-$i" &
 done
 wait
@@ -332,7 +332,7 @@ wait
 podman stats insights-ros-ingress
 
 # Monitor docker-compose services
-podman-compose -f scripts/docker-compose.yml top
+podman-compose -f deployments/docker-compose/docker-compose.yml top
 ```
 
 This testing framework provides comprehensive coverage of the insights-ros-ingress service functionality and integration points.

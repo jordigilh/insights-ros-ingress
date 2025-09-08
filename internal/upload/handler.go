@@ -10,24 +10,28 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/RedHatInsights/insights-ros-ingress/internal/auth"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/config"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/health"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/logger"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/messaging"
 	"github.com/RedHatInsights/insights-ros-ingress/internal/storage"
 	"github.com/google/uuid"
+	"github.com/redhatinsights/platform-go-middlewares/v2/identity"
 	"github.com/sirupsen/logrus"
+	authenticationv1 "k8s.io/api/authentication/v1"
 )
 
 // Handler handles HCCM upload requests
 type Handler struct {
-	config          *config.Config
-	storageClient   *storage.Client
-	messagingClient *messaging.Producer
+	config           *config.Config
+	storageClient    *storage.Client
+	messagingClient  *messaging.Producer
 	payloadExtractor *PayloadExtractor
-	logger          *logrus.Logger
+	logger           *logrus.Logger
 }
 
 // UploadResponse represents the response returned to clients
@@ -42,19 +46,8 @@ type UploadData struct {
 	OrgID   string `json:"org_id,omitempty"`
 }
 
-// Identity represents the x-rh-identity header structure
-type Identity struct {
-	Internal struct {
-		OrgID string `json:"org_id"`
-	} `json:"internal"`
-	Identity struct {
-		AccountNumber string `json:"account_number"`
-		OrgID         string `json:"org_id"`
-		Type          string `json:"type"`
-	} `json:"identity"`
-}
-
 // NewHandler creates a new upload handler
+// Authentication is expected to be handled by middleware that stores user info in request context
 func NewHandler(cfg *config.Config, storageClient *storage.Client, messagingClient *messaging.Producer, log *logrus.Logger) *Handler {
 	return &Handler{
 		config:           cfg,
@@ -78,8 +71,8 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	requestLogger.WithFields(logrus.Fields{
-		"method":     r.Method,
-		"user_agent": r.Header.Get("User-Agent"),
+		"method":         r.Method,
+		"user_agent":     r.Header.Get("User-Agent"),
 		"content_length": r.ContentLength,
 	}).Info("Received upload request")
 
@@ -110,7 +103,7 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Update logger with identity context
 	if identity != nil {
-		requestLogger = logger.WithUploadContext(h.logger, requestID, identity.Identity.AccountNumber, identity.Identity.OrgID)
+		requestLogger = logger.WithUploadContext(h.logger, requestID, identity.AccountNumber, identity.OrgID)
 	}
 
 	// Get file from multipart form
@@ -160,8 +153,8 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	if identity != nil {
 		response.Upload = UploadData{
-			Account: identity.Identity.AccountNumber,
-			OrgID:   identity.Identity.OrgID,
+			Account: identity.AccountNumber,
+			OrgID:   identity.OrgID,
 		}
 	}
 
@@ -173,7 +166,7 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // processUpload handles the core upload processing logic
-func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID string, identity *Identity, logger *logrus.Entry) error {
+func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID string, identity *identity.Identity, logger *logrus.Entry) error {
 	// Extract payload
 	extractedPayload, err := h.payloadExtractor.ExtractPayload(file, requestID)
 	if err != nil {
@@ -219,10 +212,10 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 			Size:        fileInfo.Size(),
 			ContentType: "text/csv",
 			Metadata: map[string]string{
-				"ManifestId":       extractedPayload.Manifest.UUID,
-				"RequestId":        requestID,
-				"ClusterUuid":      extractedPayload.Manifest.ClusterID,
-				"OperatorVersion":  extractedPayload.Manifest.OperatorVersion,
+				"ManifestId":      extractedPayload.Manifest.UUID,
+				"RequestId":       requestID,
+				"ClusterUuid":     extractedPayload.Manifest.ClusterID,
+				"OperatorVersion": extractedPayload.Manifest.OperatorVersion,
 			},
 		}
 
@@ -244,10 +237,14 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 		}).Info("Successfully uploaded ROS file")
 	}
 
+	token, err := h.getOAuthTokenFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get OAuth token from context: %w", err)
+	}
 	// Send ROS event message
 	rosMessage := &messaging.ROSMessage{
 		RequestID:   requestID,
-		B64Identity: h.getB64Identity(identity),
+		B64Identity: token,
 		Metadata: messaging.ROSMetadata{
 			Account:         h.getAccountID(identity),
 			OrgID:           h.getOrgID(identity),
@@ -266,8 +263,8 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 	}
 
 	logger.WithFields(logrus.Fields{
-		"topic":           h.config.Kafka.Topic,
-		"uploaded_files":  len(uploadedFiles),
+		"topic":          h.config.Kafka.Topic,
+		"uploaded_files": len(uploadedFiles),
 	}).Info("Successfully sent ROS event message")
 
 	// Send validation confirmation
@@ -316,24 +313,184 @@ func (h *Handler) handleTestRequest(w http.ResponseWriter, r *http.Request, requ
 	json.NewEncoder(w).Encode(response)
 }
 
-func (h *Handler) extractIdentity(r *http.Request) (*Identity, error) {
+func (h *Handler) extractIdentity(r *http.Request) (*identity.Identity, error) {
 	if !h.config.Auth.Enabled {
 		return nil, nil
 	}
 
-	// In a real implementation, this would decode the x-rh-identity header
-	// For now, we'll create a mock identity
-	return &Identity{
-		Identity: struct {
-			AccountNumber string `json:"account_number"`
-			OrgID         string `json:"org_id"`
-			Type          string `json:"type"`
-		}{
-			AccountNumber: "mock-account",
-			OrgID:         "mock-org",
-			Type:          "User",
+	// Get authenticated user from request context (set by auth middleware)
+	user, err := h.getAuthenticatedUserFromContext(r.Context())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get authenticated user from context: %w", err)
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user": user.Username,
+		"uid":  user.UID,
+	}).Debug("Retrieved authenticated user from context")
+
+	// Create identity from OAuth2 user information
+	return h.createIdentityFromOAuth2User(user), nil
+}
+
+// getAuthenticatedUserFromContext retrieves the authenticated user from request context
+func (h *Handler) getAuthenticatedUserFromContext(ctx context.Context) (*authenticationv1.UserInfo, error) {
+	userValue := ctx.Value(auth.AuthenticatedUserKey)
+	if userValue == nil {
+		return nil, fmt.Errorf("no authenticated user found in context - ensure auth middleware is properly configured")
+	}
+
+	user, ok := userValue.(authenticationv1.UserInfo)
+	if !ok {
+		return nil, fmt.Errorf("invalid user type in context")
+	}
+
+	return &user, nil
+}
+
+// getOAuthTokenFromContext retrieves the OAuth token from request context (if needed for downstream services)
+func (h *Handler) getOAuthTokenFromContext(ctx context.Context) (string, error) {
+	tokenValue := ctx.Value(auth.OauthTokenKey)
+	if tokenValue == nil {
+		return "", fmt.Errorf("no OAuth token found in context")
+	}
+
+	token, ok := tokenValue.(string)
+	if !ok {
+		return "", fmt.Errorf("invalid token type in context")
+	}
+
+	return token, nil
+}
+
+// createIdentityFromOAuth2User creates an identity from OAuth2/Kubernetes user information
+// This supports tokens issued by Keycloak or Kubernetes API server
+func (h *Handler) createIdentityFromOAuth2User(user *authenticationv1.UserInfo) *identity.Identity {
+	// Extract organization ID and account number from user information
+	// Adjust these extraction methods based on your OAuth2 provider (Keycloak/K8s API)
+
+	orgID := h.extractOrgIDFromUser(user)
+	accountNumber := h.extractAccountNumberFromUser(user)
+
+	// Determine token type based on username pattern
+	tokenType := "User"
+	if strings.HasPrefix(user.Username, "system:serviceaccount:") {
+		tokenType = "ServiceAccount"
+	}
+
+	return &identity.Identity{
+		AccountNumber: accountNumber,
+		OrgID:         orgID,
+		Type:          tokenType,
+		AuthType:      "oauth2",
+		User: &identity.User{
+			Username:  user.Username,
+			Email:     h.extractEmailFromUser(user),
+			FirstName: h.extractFirstNameFromUser(user),
+			LastName:  h.extractLastNameFromUser(user),
+			Active:    true,
+			OrgAdmin:  h.isOrgAdminUser(user),
+			Internal:  h.isInternalUser(user),
+			Locale:    "en_US",
 		},
-	}, nil
+		Internal: identity.Internal{
+			OrgID: orgID,
+		},
+	}
+}
+
+// Helper methods to extract information from OAuth2 user
+// Customize these based on your OAuth2 provider (Keycloak, Kubernetes API, etc.)
+
+func (h *Handler) extractOrgIDFromUser(user *authenticationv1.UserInfo) string {
+	// Look for org ID in user groups (common in Keycloak/K8s RBAC)
+	for _, group := range user.Groups {
+		if strings.HasPrefix(group, "org:") {
+			orgID := strings.TrimPrefix(group, "org:")
+			if orgID != "" { // Skip empty org IDs
+				return orgID
+			}
+		}
+	}
+
+	// Check extra fields (Keycloak custom claims, K8s annotations)
+	if orgIDExtra, exists := user.Extra["org_id"]; exists && len(orgIDExtra) > 0 {
+		return orgIDExtra[0]
+	}
+
+	// For Keycloak, you might also check:
+	// - user.Extra["organization"]
+	// - user.Extra["tenant_id"]
+
+	// Default fallback - consider making this configurable
+	return "1"
+}
+
+func (h *Handler) extractAccountNumberFromUser(user *authenticationv1.UserInfo) string {
+	// Check extra fields (Keycloak custom claims, K8s annotations)
+	if accountExtra, exists := user.Extra["account_number"]; exists && len(accountExtra) > 0 {
+		return accountExtra[0]
+	}
+
+	// Check for Keycloak alternative fields
+	if customerIDExtra, exists := user.Extra["customer_id"]; exists && len(customerIDExtra) > 0 {
+		return customerIDExtra[0]
+	}
+
+	if clientIDExtra, exists := user.Extra["client_id"]; exists && len(clientIDExtra) > 0 {
+		return clientIDExtra[0]
+	}
+
+	// Look for account in user groups (RBAC mapping)
+	for _, group := range user.Groups {
+		if strings.HasPrefix(group, "account:") {
+			return strings.TrimPrefix(group, "account:")
+		}
+	}
+
+	// Could also parse from username (e.g., "user@account123") if needed
+
+	// Default fallback - consider making this configurable
+	return "1"
+}
+
+func (h *Handler) extractEmailFromUser(user *authenticationv1.UserInfo) string {
+	if emailExtra, exists := user.Extra["email"]; exists && len(emailExtra) > 0 {
+		return emailExtra[0]
+	}
+	return ""
+}
+
+func (h *Handler) extractFirstNameFromUser(user *authenticationv1.UserInfo) string {
+	if firstNameExtra, exists := user.Extra["first_name"]; exists && len(firstNameExtra) > 0 {
+		return firstNameExtra[0]
+	}
+	return ""
+}
+
+func (h *Handler) extractLastNameFromUser(user *authenticationv1.UserInfo) string {
+	if lastNameExtra, exists := user.Extra["last_name"]; exists && len(lastNameExtra) > 0 {
+		return lastNameExtra[0]
+	}
+	return ""
+}
+
+func (h *Handler) isOrgAdminUser(user *authenticationv1.UserInfo) bool {
+	for _, group := range user.Groups {
+		if group == "org-admin" || strings.Contains(group, "admin") {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Handler) isInternalUser(user *authenticationv1.UserInfo) bool {
+	for _, group := range user.Groups {
+		if group == "internal" || strings.Contains(group, "redhat") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) getFileFromRequest(r *http.Request) (io.ReadCloser, *multipart.FileHeader, error) {
@@ -369,31 +526,28 @@ func (h *Handler) isValidContentType(contentType string) bool {
 	return vndPattern.MatchString(contentType)
 }
 
-func (h *Handler) getSchemaName(identity *Identity) string {
-	if identity != nil && identity.Identity.OrgID != "" {
-		return fmt.Sprintf("org_%s", identity.Identity.OrgID)
+func (h *Handler) getSchemaName(identity *identity.Identity) string {
+	if identity != nil && identity.OrgID != "" {
+		return fmt.Sprintf("org_%s", identity.OrgID)
 	}
 	return "default"
 }
 
-func (h *Handler) getAccountID(identity *Identity) string {
+func (h *Handler) getAccountID(identity *identity.Identity) string {
 	if identity != nil {
-		return identity.Identity.AccountNumber
+		return identity.AccountNumber
 	}
 	return "unknown"
 }
 
-func (h *Handler) getOrgID(identity *Identity) string {
+func (h *Handler) getOrgID(identity *identity.Identity) string {
 	if identity != nil {
-		return identity.Identity.OrgID
+		if identity.OrgID == "" {
+			return identity.Internal.OrgID
+		}
+		return identity.OrgID
 	}
 	return "unknown"
-}
-
-func (h *Handler) getB64Identity(identity *Identity) string {
-	// In a real implementation, this would return the original base64 identity
-	// For now, return empty string
-	return ""
 }
 
 func (h *Handler) respondError(w http.ResponseWriter, statusCode int, message string, logger *logrus.Entry) {

@@ -22,6 +22,7 @@ type ContextKey string
 const (
 	AuthenticatedUserKey ContextKey = "authenticated_user"
 	OauthTokenKey        ContextKey = "oauth_token"
+	bearerPrefix                    = "Bearer "
 )
 
 // KubernetesAuthMiddleware creates middleware that validates tokens using Kubernetes TokenReviewer API
@@ -104,7 +105,7 @@ var AuthMiddleware = func(authClient authenticationv1client.AuthenticationV1Inte
 			}
 
 			// Check Bearer token format
-			const bearerPrefix = "Bearer "
+
 			if !strings.HasPrefix(authHeader, bearerPrefix) {
 				log.Debug("Invalid Authorization header format - must be 'Bearer <token>'")
 				http.Error(w, "Unauthorized: Invalid Authorization header format", http.StatusUnauthorized)

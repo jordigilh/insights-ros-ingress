@@ -1,6 +1,10 @@
 # Default values for insights-ros-ingress
 # Based on ros-ocp-backend patterns for consistency
 
+# Chart name overrides
+nameOverride: ""
+fullnameOverride: ""
+
 global:
   # Storage class for persistent volumes
   storageClass: "standard"
@@ -30,6 +34,14 @@ replicaCount: 1
 service:
   type: ClusterIP
   port: 8080
+
+# Route configuration (for OpenShift)
+route:
+  enabled: false
+  host: ""
+  annotations: {}
+  tls:
+    enabled: false
 
 # Database configuration for insights-ros-ingress
 database:
@@ -229,8 +241,7 @@ commonLabels: {}
 # Additional annotations for all resources
 commonAnnotations: {}
 
-# Compatibility mappings for existing templates (for smooth migration)
-# Server configuration (maps to config.server)
+# Server configuration (used in deployment)
 server:
   port: 8080
   readTimeout: 30
@@ -238,7 +249,7 @@ server:
   idleTimeout: 120
   debug: false
 
-# Storage configuration (maps to config.storage)
+# Storage configuration (used in deployment)
 storage:
   bucket: "ros-data"
   useSSL: false
@@ -248,14 +259,14 @@ storage:
   accessKeyKey: "access-key"
   secretKeyKey: "secret-key"
 
-# Authentication configuration
+# Authentication configuration (used in various templates)
 auth:
   enabled: true
   allowedOrgs: []
   existingSecret: "auth-credentials"
   jwtSecretKey: "jwt-secret"
 
-# Upload configuration (maps to config.upload)
+# Upload configuration (used in deployment)
 upload:
   maxUploadSize: 104857600
   maxMemory: 33554432
@@ -264,13 +275,13 @@ upload:
     - "application/vnd.redhat.hccm.upload"
   requireAuth: true
 
-# Logging configuration (maps to config.logging)
+# Logging configuration (used in deployment)
 logging:
   level: "info"
   format: "json"
   output: "stdout"
 
-# Metrics configuration (maps to config.metrics)
+# Metrics configuration (used in servicemonitor)
 metrics:
   enabled: true
   path: "/metrics"

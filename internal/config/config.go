@@ -11,13 +11,13 @@ import (
 // Config represents the application configuration
 // Designed to mimic Clowder behavior but work independently in K8s
 type Config struct {
-	Server   ServerConfig   `json:"server"`
-	Storage  StorageConfig  `json:"storage"`
-	Kafka    KafkaConfig    `json:"kafka"`
-	Upload   UploadConfig   `json:"upload"`
-	Logging  LoggingConfig  `json:"logging"`
-	Metrics  MetricsConfig  `json:"metrics"`
-	Auth     AuthConfig     `json:"auth"`
+	Server  ServerConfig  `json:"server"`
+	Storage StorageConfig `json:"storage"`
+	Kafka   KafkaConfig   `json:"kafka"`
+	Upload  UploadConfig  `json:"upload"`
+	Logging LoggingConfig `json:"logging"`
+	Metrics MetricsConfig `json:"metrics"`
+	Auth    AuthConfig    `json:"auth"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -31,38 +31,38 @@ type ServerConfig struct {
 
 // StorageConfig holds MinIO/S3 storage configuration
 type StorageConfig struct {
-	Endpoint        string `json:"endpoint"`
-	Region          string `json:"region"`
-	Bucket          string `json:"bucket"`
-	AccessKey       string `json:"accessKey"`
-	SecretKey       string `json:"secretKey"`
-	UseSSL          bool   `json:"useSSL"`
-	URLExpiration   int    `json:"urlExpiration"`
-	PathPrefix      string `json:"pathPrefix"`
+	Endpoint      string `json:"endpoint"`
+	Region        string `json:"region"`
+	Bucket        string `json:"bucket"`
+	AccessKey     string `json:"accessKey"`
+	SecretKey     string `json:"secretKey"`
+	UseSSL        bool   `json:"useSSL"`
+	URLExpiration int    `json:"urlExpiration"`
+	PathPrefix    string `json:"pathPrefix"`
 }
 
 // KafkaConfig holds Kafka configuration
 type KafkaConfig struct {
-	Brokers       []string `json:"brokers"`
-	Topic         string   `json:"topic"`
-	SecurityProtocol string `json:"securityProtocol"`
-	SASLMechanism    string `json:"saslMechanism"`
-	SASLUsername     string `json:"saslUsername"`
-	SASLPassword     string `json:"saslPassword"`
-	SSLCALocation    string `json:"sslCaLocation"`
-	ClientID         string `json:"clientId"`
-	BatchSize        int    `json:"batchSize"`
-	Retries          int    `json:"retries"`
+	Brokers          []string `json:"brokers"`
+	Topic            string   `json:"topic"`
+	SecurityProtocol string   `json:"securityProtocol"`
+	SASLMechanism    string   `json:"saslMechanism"`
+	SASLUsername     string   `json:"saslUsername"`
+	SASLPassword     string   `json:"saslPassword"`
+	SSLCALocation    string   `json:"sslCaLocation"`
+	ClientID         string   `json:"clientId"`
+	BatchSize        int      `json:"batchSize"`
+	Retries          int      `json:"retries"`
 }
 
 // UploadConfig holds upload processing configuration
 type UploadConfig struct {
-	MaxUploadSize    int64  `json:"maxUploadSize"`
-	MaxMemory        int64  `json:"maxMemory"`
-	TempDir          string `json:"tempDir"`
-	AllowedTypes     []string `json:"allowedTypes"`
-	RequireAuth      bool   `json:"requireAuth"`
-	ValidationTopic  string `json:"validationTopic"`
+	MaxUploadSize   int64    `json:"maxUploadSize"`
+	MaxMemory       int64    `json:"maxMemory"`
+	TempDir         string   `json:"tempDir"`
+	AllowedTypes    []string `json:"allowedTypes"`
+	RequireAuth     bool     `json:"requireAuth"`
+	ValidationTopic string   `json:"validationTopic"`
 }
 
 // LoggingConfig holds logging configuration
@@ -120,11 +120,13 @@ func Load() (*Config, error) {
 			Retries:          getEnvInt("KAFKA_RETRIES", 3),
 		},
 		Upload: UploadConfig{
-			MaxUploadSize:   getEnvInt64("UPLOAD_MAX_SIZE", 100*1024*1024), // 100MB
-			MaxMemory:       getEnvInt64("UPLOAD_MAX_MEMORY", 32*1024*1024), // 32MB
-			TempDir:         getEnvString("UPLOAD_TEMP_DIR", "/tmp"),
-			AllowedTypes:    getEnvStringSlice("UPLOAD_ALLOWED_TYPES", []string{"application/vnd.redhat.hccm.upload"}),
-			RequireAuth:     getEnvBool("UPLOAD_REQUIRE_AUTH", true),
+			MaxUploadSize: getEnvInt64("UPLOAD_MAX_SIZE", 100*1024*1024),  // 100MB
+			MaxMemory:     getEnvInt64("UPLOAD_MAX_MEMORY", 32*1024*1024), // 32MB
+			TempDir:       getEnvString("UPLOAD_TEMP_DIR", "/tmp"),
+			AllowedTypes:  getEnvStringSlice("UPLOAD_ALLOWED_TYPES", []string{"application/vnd.redhat.hccm.upload"}),
+			RequireAuth:   getEnvBool("UPLOAD_REQUIRE_AUTH", true),
+
+			// TODO: Remove the validation topic from the config
 			ValidationTopic: getEnvString("KAFKA_VALIDATION_TOPIC", "platform.upload.validation"),
 		},
 		Logging: LoggingConfig{

@@ -20,8 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// contextKey is a custom type for context keys to avoid collisions
-
 func main() {
 	// Initialize logger
 	log := logger.InitLogger()

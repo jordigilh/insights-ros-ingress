@@ -103,6 +103,7 @@ services:
       - postgres_data:/var/lib/pgsql/data
 
 
+
 volumes:
   minio_data:
     driver: local

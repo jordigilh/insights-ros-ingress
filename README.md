@@ -132,6 +132,58 @@ The integration test validates:
 
 For detailed testing instructions, see [docs/testing.md](docs/testing.md).
 
+## Troubleshooting
+
+### Kafka Cluster ID Mismatch
+
+If Kafka fails to start with an `InconsistentClusterIdException`, this indicates that Kafka has cached metadata from a previous Zookeeper cluster:
+
+```
+kafka.common.InconsistentClusterIdException: The Cluster ID doesn't match stored clusterId
+```
+
+**Solution**: Clear the data volumes to remove cached metadata:
+
+```bash
+# Stop all services
+podman-compose -f deployments/docker-compose/docker-compose.yml down
+
+# Clear all data volumes
+podman volume prune -f
+
+# Restart services with fresh data
+podman-compose -f deployments/docker-compose/docker-compose.yml up -d
+```
+
+### Port Already in Use
+
+If you encounter `bind: address already in use` errors when running `make run-dev`:
+
+**Solution**: Kill any existing instances of the service:
+
+```bash
+# Find and kill any running insights-ros-ingress processes
+pkill -f insights-ros-ingress
+
+# Or check what's using the port
+lsof -i :8080
+
+# Then run the service again
+make run-dev
+```
+
+### Service Dependencies
+
+Ensure all required services are running before starting the application:
+
+```bash
+# Check service status
+podman-compose -f deployments/docker-compose/docker-compose.yml ps
+
+# View service logs if needed
+podman-compose -f deployments/docker-compose/docker-compose.yml logs -f kafka
+```
+
 ## Contributing
 
 Please follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).

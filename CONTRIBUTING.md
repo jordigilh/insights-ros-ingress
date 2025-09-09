@@ -95,17 +95,12 @@ make all
 
 ## Container Development
 
-This project follows the CLAUDE.md guidelines and uses **podman** instead of docker:
-
 ```bash
 # Build image with podman
 make image
 
-# Run development environment
-make dev-env-up
 
-# View logs
-make dev-env-logs
+make push-image
 ```
 
 ## Submitting Changes

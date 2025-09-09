@@ -131,19 +131,31 @@ run-test: build ## Run the application locally with test configuration
 		exit 1; \
 	fi
 
+.PHONY: run-dev
+run-dev: build ## Run the application locally with development configuration
+	@echo "Running $(APP_NAME) with development configuration..."
+	@if [ -f configs/local-dev.env ]; then \
+		export $$(cat configs/local-dev.env | grep -v '^#' | xargs) && ./$(BIN_DIR)/$(APP_NAME); \
+	else \
+		echo "Development configuration not found. Run: make dev-env-up first"; \
+		exit 1; \
+	fi
+
 .PHONY: dev-env-up
-dev-env-up: ## Start development environment with podman-compose
+dev-env-up: ## Start development environment with KIND cluster and podman-compose
 	@echo "Starting development environment..."
+	@echo "Setting up KIND cluster for authentication..."
+	chmod +x deployments/docker-compose/scripts/setup-dev-auth.sh
+	./deployments/docker-compose/scripts/setup-dev-auth.sh
+	@echo "Starting services with podman-compose..."
 	podman-compose -f deployments/docker-compose/docker-compose.yml up -d
 
 .PHONY: dev-env-down
-dev-env-down: ## Stop development environment
+dev-env-down: ## Stop development environment and KIND cluster
 	@echo "Stopping development environment..."
 	podman-compose -f deployments/docker-compose/docker-compose.yml down
-
-.PHONY: dev-env-logs
-dev-env-logs: ## Show development environment logs
-	podman-compose -f deployments/docker-compose/docker-compose.yml logs -f
+	@echo "Stopping KIND cluster..."
+	-kind delete cluster --name insights-dev 2>/dev/null || true
 
 .PHONY: test-integration
 test-integration: ## Run end-to-end integration test

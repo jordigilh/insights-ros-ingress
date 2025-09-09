@@ -18,7 +18,7 @@ on:
       debug:
         description: 'Enable debug mode'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:
@@ -73,7 +73,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
 
       - name: Set up Docker Buildx

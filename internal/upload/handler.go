@@ -251,7 +251,7 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 			SourceID:        extractedPayload.Manifest.ClusterID, // Using cluster ID as source ID
 			ProviderUUID:    extractedPayload.Manifest.ClusterID, // Using cluster ID as provider UUID
 			ClusterUUID:     extractedPayload.Manifest.ClusterID,
-			ClusterAlias:    extractedPayload.Manifest.ClusterAlias,
+			ClusterAlias:    extractedPayload.Manifest.ClusterID,
 			OperatorVersion: extractedPayload.Manifest.OperatorVersion,
 		},
 		Files:      uploadedFiles,

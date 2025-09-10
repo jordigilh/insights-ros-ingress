@@ -9,7 +9,7 @@ RUN go get -d ./... && \
     go build -o insights-ros-ingress ./cmd/insights-ros-ingress && \
     echo "$(go version)" > go_version_details
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 WORKDIR /
 RUN microdnf -y update \
     --disableplugin=subscription-manager

@@ -24,7 +24,7 @@ GO_BUILD_FLAGS := -ldflags "$(LDFLAGS)"
 .PHONY: help
 help: ## Display this help message
 	@echo "Available targets:"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: clean
 clean: clean-mocks ## Clean build artifacts
@@ -85,7 +85,7 @@ clean-mocks: ## Remove generated mocks
 	@echo "Mocks cleaned"
 
 .PHONY: build
-build: clean deps ## Build the binary
+build: clean mocks deps  ## Build the binary
 	@echo "Building $(APP_NAME)..."
 	mkdir -p $(BIN_DIR)
 ifeq ($(CGO_ENABLED),1)
@@ -110,11 +110,35 @@ image: ## Build container image using podman
 	podman build --platform=linux/amd64 -t $(IMAGE_NAME) .
 	@echo "Image built: $(IMAGE_NAME)"
 
+.PHONY: image-arm64
+image-arm64: ## Build container image for arm64 architecture
+	@echo "Building container image for arm64..."
+	podman build --platform=linux/arm64 -t $(IMAGE_NAME)-arm64 .
+	@echo "ARM64 image built: $(IMAGE_NAME)-arm64"
+
+.PHONY: image-amd64
+image-amd64: ## Build container image for amd64 architecture
+	@echo "Building container image for amd64..."
+	podman build --platform=linux/amd64 -t $(IMAGE_NAME)-amd64 .
+	@echo "AMD64 image built: $(IMAGE_NAME)-amd64"
+
 .PHONY: image-push
 image-push: image ## Push container image to registry
 	@echo "Pushing image to registry..."
 	podman tag $(IMAGE_NAME) $(REGISTRY)/$(IMAGE_NAME)
 	podman push $(REGISTRY)/$(IMAGE_NAME)
+
+.PHONY: image-push-arm64
+image-push-arm64: image-arm64 ## Push ARM64 container image to registry
+	@echo "Pushing ARM64 image to registry..."
+	podman tag $(IMAGE_NAME)-arm64 $(REGISTRY)/$(IMAGE_NAME)-arm64
+	podman push $(REGISTRY)/$(IMAGE_NAME)-arm64
+
+.PHONY: image-push-amd64
+image-push-amd64: image-amd64 ## Push AMD64 container image to registry
+	@echo "Pushing AMD64 image to registry..."
+	podman tag $(IMAGE_NAME)-amd64 $(REGISTRY)/$(IMAGE_NAME)-amd64
+	podman push $(REGISTRY)/$(IMAGE_NAME)-amd64
 
 .PHONY: run
 run: build ## Run the application locally

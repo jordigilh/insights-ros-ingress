@@ -251,7 +251,7 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 			SourceID:        extractedPayload.Manifest.ClusterID, // Using cluster ID as source ID
 			ProviderUUID:    extractedPayload.Manifest.ClusterID, // Using cluster ID as provider UUID
 			ClusterUUID:     extractedPayload.Manifest.ClusterID,
-			ClusterAlias:    extractedPayload.Manifest.ClusterID,
+			ClusterAlias:    h.getClusterAlias(extractedPayload.Manifest),
 			OperatorVersion: extractedPayload.Manifest.OperatorVersion,
 		},
 		Files:      uploadedFiles,
@@ -282,6 +282,17 @@ func (h *Handler) generateRequestID() string {
 	return uuid.New().String()
 }
 
+// getClusterAlias returns the cluster alias from manifest, falling back to cluster ID
+// This matches koku's behavior: prefer explicit alias, fallback to cluster ID
+func (h *Handler) getClusterAlias(manifest *Manifest) string {
+	if manifest.ClusterAlias != "" {
+		return manifest.ClusterAlias
+	}
+	// Fallback to cluster ID if no explicit alias is provided
+	// This matches koku's get_cluster_alias() behavior
+	return manifest.ClusterID
+}
+
 func (h *Handler) isTestRequest(r *http.Request) bool {
 	// Check form data for test request
 	if r.FormValue("test") == "test" {
@@ -297,7 +308,7 @@ func (h *Handler) isTestRequest(r *http.Request) bool {
 	return false
 }
 
-func (h *Handler) handleTestRequest(w http.ResponseWriter, r *http.Request, requestID string, logger *logrus.Entry) {
+func (h *Handler) handleTestRequest(w http.ResponseWriter, _ *http.Request, requestID string, logger *logrus.Entry) {
 	logger.Info("Handling test request")
 
 	response := UploadResponse{

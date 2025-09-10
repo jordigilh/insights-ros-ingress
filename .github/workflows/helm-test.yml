@@ -143,17 +143,6 @@ jobs:
           echo "Loading Docker image to KIND cluster..."
           kind load docker-image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --name ${{ env.KIND_CLUSTER_NAME }}
 
-      - name: Install NGINX Ingress Controller
-        run: |
-          echo "Installing NGINX Ingress Controller..."
-          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-          
-          echo "Waiting for NGINX Ingress Controller to be ready..."
-          kubectl wait --namespace ingress-nginx \
-            --for=condition=ready pod \
-            --selector=app.kubernetes.io/component=controller \
-            --timeout=300s
-
       - name: Set up storage class
         run: |
           echo "Setting up default storage class..."
@@ -199,11 +188,11 @@ jobs:
       - name: Create NodePort services for testing
         run: |
           echo "Creating NodePort services for testing..."
-          
+
           # Insights ROS Ingress service
           kubectl patch service ${{ env.HELM_RELEASE_NAME }} -n ${{ env.NAMESPACE }} \
             -p '{"spec":{"type":"NodePort","ports":[{"port":8080,"nodePort":30080,"targetPort":"http","protocol":"TCP","name":"http"}]}}'
-          
+
           # MinIO service
           kubectl patch service ${{ env.HELM_RELEASE_NAME }}-minio -n ${{ env.NAMESPACE }} \
             --type='json' \
@@ -221,7 +210,7 @@ jobs:
       - name: Run health checks
         run: |
           echo "Running health checks..."
-          
+
           # Check health endpoint
           echo "Testing health endpoint..."
           if curl -f -s http://localhost:30080/health; then
@@ -230,7 +219,7 @@ jobs:
             echo "✗ Health endpoint is not accessible"
             exit 1
           fi
-          
+
           # Check readiness endpoint
           echo "Testing readiness endpoint..."
           if curl -f -s http://localhost:30080/ready; then
@@ -239,7 +228,7 @@ jobs:
             echo "✗ Readiness endpoint is not accessible"
             exit 1
           fi
-          
+
           # Check MinIO
           echo "Testing MinIO..."
           if curl -f -s http://localhost:30099/; then
@@ -253,10 +242,10 @@ jobs:
         run: |
           echo "Running dataflow test..."
           chmod +x deployments/kubernetes/scripts/test-k8s-dataflow.sh
-          
+
           export NAMESPACE=${{ env.NAMESPACE }}
           export HELM_RELEASE_NAME=${{ env.HELM_RELEASE_NAME }}
-          
+
           ./deployments/kubernetes/scripts/test-k8s-dataflow.sh
 
       - name: Debug on failure
@@ -265,19 +254,19 @@ jobs:
           echo "=== Debug Information ==="
           echo "Pods in namespace ${{ env.NAMESPACE }}:"
           kubectl get pods -n ${{ env.NAMESPACE }} -o wide
-          
+
           echo "=== Pod Logs ==="
           for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -o name); do
             echo "--- Logs for $pod ---"
             kubectl logs -n ${{ env.NAMESPACE }} $pod --tail=50 || true
           done
-          
+
           echo "=== Events ==="
           kubectl get events -n ${{ env.NAMESPACE }} --sort-by='.lastTimestamp'
-          
+
           echo "=== Services ==="
           kubectl get services -n ${{ env.NAMESPACE }} -o wide
-          
+
           echo "=== PVCs ==="
           kubectl get pvc -n ${{ env.NAMESPACE }}
 

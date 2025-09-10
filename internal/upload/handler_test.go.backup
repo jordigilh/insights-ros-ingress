@@ -160,7 +160,29 @@ var _ = Describe("Handler OAuth2 Authentication", func() {
 			})
 		})
 
-		// Type validation tests removed - covered in auth_test.go middleware tests
+		Context("with wrong type in context", func() {
+			It("should return error", func() {
+				ctx := context.WithValue(context.Background(), auth.AuthenticatedUserKey, "not-a-user-info")
+
+				result, err := handler.getAuthenticatedUserFromContext(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid user type in context"))
+				Expect(result).To(BeNil())
+			})
+		})
+
+		Context("with struct instead of correct type", func() {
+			It("should return error", func() {
+				ctx := context.WithValue(context.Background(), auth.AuthenticatedUserKey, struct{ Username string }{Username: "test"})
+
+				result, err := handler.getAuthenticatedUserFromContext(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid user type in context"))
+				Expect(result).To(BeNil())
+			})
+		})
 	})
 
 	Describe("getOAuthTokenFromContext", func() {
@@ -192,7 +214,17 @@ var _ = Describe("Handler OAuth2 Authentication", func() {
 			})
 		})
 
-		// OAuth token type validation tests removed - covered in auth_test.go middleware tests
+		Context("with wrong type in context", func() {
+			It("should return error", func() {
+				ctx := context.WithValue(context.Background(), auth.OauthTokenKey, 12345)
+
+				result, err := handler.getOAuthTokenFromContext(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid token type in context"))
+				Expect(result).To(BeEmpty())
+			})
+		})
 
 		Context("with empty token", func() {
 			It("should still return successfully", func() {

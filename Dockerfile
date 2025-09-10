@@ -11,8 +11,6 @@ RUN go get -d ./... && \
 
 FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 WORKDIR /
-RUN microdnf -y update \
-    --disableplugin=subscription-manager
 COPY --from=builder /go/src/app/insights-ros-ingress ./insights-ros-ingress
 COPY --from=builder /go/src/app/go_version_details ./go_version_details
 EXPOSE 8080

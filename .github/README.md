@@ -33,12 +33,12 @@ This directory contains GitHub Actions workflows for the insights-ros-ingress pr
 
 - Runs tests and linting
 - Builds multi-platform container images (amd64/arm64)
-- Pushes to quay.io/insights-ros-ingress
+- Pushes to quay.io/insights-onprem/insights-ros-ingress
 - Supports custom tagging via workflow dispatch
 
 ## Container Registry
 
-Images are published to: `quay.io/insights-ros-ingress`
+Images are published to: `quay.io/insights-onprem/insights-ros-ingress`
 
 ### Available Tags
 - `latest` - Latest main branch build

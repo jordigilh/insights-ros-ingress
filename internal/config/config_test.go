@@ -1,117 +1,209 @@
-package config
+package config_test
 
 import (
 	"os"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/RedHatInsights/insights-ros-ingress/internal/config"
 )
 
-func TestLoad(t *testing.T) {
-	// Set required environment variables for testing
-	os.Setenv("STORAGE_ENDPOINT", "localhost:9000")
-	os.Setenv("STORAGE_ACCESS_KEY", "test-access-key")
-	os.Setenv("STORAGE_SECRET_KEY", "test-secret-key")
-	os.Setenv("AUTH_ENABLED", "false") // Disable auth for testing
+var _ = Describe("Configuration Loading", func() {
+	Context("When environment variables are set", func() {
+		BeforeEach(func() {
+			// Set required environment variables for testing
+			os.Setenv("STORAGE_ENDPOINT", "localhost:9000")
+			os.Setenv("STORAGE_ACCESS_KEY", "test-access-key")
+			os.Setenv("STORAGE_SECRET_KEY", "test-secret-key")
+			os.Setenv("AUTH_ENABLED", "false") // Disable auth for testing
+		})
 
-	defer func() {
-		// Clean up environment variables
-		os.Unsetenv("STORAGE_ENDPOINT")
-		os.Unsetenv("STORAGE_ACCESS_KEY")
-		os.Unsetenv("STORAGE_SECRET_KEY")
-		os.Unsetenv("AUTH_ENABLED")
-	}()
+		AfterEach(func() {
+			// Clean up environment variables
+			os.Unsetenv("STORAGE_ENDPOINT")
+			os.Unsetenv("STORAGE_ACCESS_KEY")
+			os.Unsetenv("STORAGE_SECRET_KEY")
+			os.Unsetenv("AUTH_ENABLED")
+		})
 
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Failed to load configuration: %v", err)
-	}
+		It("should load configuration successfully", func() {
+			cfg, err := config.Load()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg).ToNot(BeNil())
+		})
 
-	// Test default values
-	if cfg.Server.Port != 8080 {
-		t.Errorf("Expected server port 8080, got %d", cfg.Server.Port)
-	}
+		It("should set correct default values", func() {
+			cfg, err := config.Load()
+			Expect(err).ToNot(HaveOccurred())
 
-	if cfg.Storage.Bucket != "insights-ros-data" {
-		t.Errorf("Expected storage bucket 'insights-ros-data', got %s", cfg.Storage.Bucket)
-	}
+			Expect(cfg.Server.Port).To(Equal(8080))
+			Expect(cfg.Storage.Bucket).To(Equal("insights-ros-data"))
+			Expect(cfg.Kafka.Topic).To(Equal("hccm.ros.events"))
+		})
 
-	if cfg.Kafka.Topic != "hccm.ros.events" {
-		t.Errorf("Expected Kafka topic 'hccm.ros.events', got %s", cfg.Kafka.Topic)
-	}
-}
+		It("should use environment variables when provided", func() {
+			cfg, err := config.Load()
+			Expect(err).ToNot(HaveOccurred())
 
-func TestConfigValidation(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      *Config
-		expectError bool
-	}{
-		{
-			name: "valid config",
-			config: &Config{
-				Storage: StorageConfig{
+			Expect(cfg.Storage.Endpoint).To(Equal("localhost:9000"))
+			Expect(cfg.Storage.AccessKey).To(Equal("test-access-key"))
+			Expect(cfg.Storage.SecretKey).To(Equal("test-secret-key"))
+			Expect(cfg.Auth.Enabled).To(BeFalse())
+		})
+	})
+})
+
+var _ = Describe("Configuration Validation", func() {
+	Context("With valid configuration", func() {
+		It("should pass validation", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
 					Endpoint:  "localhost:9000",
 					AccessKey: "test-key",
 					SecretKey: "test-secret",
 				},
-				Kafka: KafkaConfig{
+				Kafka: config.KafkaConfig{
 					Brokers: []string{"localhost:9092"},
 					Topic:   "test-topic",
 				},
-				Auth: AuthConfig{
+				Auth: config.AuthConfig{
 					Enabled:   false,
 					JWTSecret: "",
 				},
-			},
-			expectError: false,
-		},
-		{
-			name: "missing storage endpoint",
-			config: &Config{
-				Storage: StorageConfig{
+			}
+
+			err := cfg.Validate()
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("With missing storage endpoint", func() {
+		It("should return validation error", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
 					Endpoint:  "",
 					AccessKey: "test-key",
 					SecretKey: "test-secret",
 				},
-				Kafka: KafkaConfig{
+				Kafka: config.KafkaConfig{
 					Brokers: []string{"localhost:9092"},
 					Topic:   "test-topic",
 				},
-			},
-			expectError: true,
-		},
-		{
-			name: "missing kafka brokers",
-			config: &Config{
-				Storage: StorageConfig{
+			}
+
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("storage endpoint is required"))
+		})
+	})
+
+	Context("With missing storage credentials", func() {
+		It("should return validation error when access key is missing", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
+					Endpoint:  "localhost:9000",
+					AccessKey: "",
+					SecretKey: "test-secret",
+				},
+				Kafka: config.KafkaConfig{
+					Brokers: []string{"localhost:9092"},
+					Topic:   "test-topic",
+				},
+			}
+
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("storage credentials are required"))
+		})
+
+		It("should return validation error when secret key is missing", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
+					Endpoint:  "localhost:9000",
+					AccessKey: "test-key",
+					SecretKey: "",
+				},
+				Kafka: config.KafkaConfig{
+					Brokers: []string{"localhost:9092"},
+					Topic:   "test-topic",
+				},
+			}
+
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("storage credentials are required"))
+		})
+	})
+
+	Context("With missing kafka brokers", func() {
+		It("should return validation error", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
 					Endpoint:  "localhost:9000",
 					AccessKey: "test-key",
 					SecretKey: "test-secret",
 				},
-				Kafka: KafkaConfig{
+				Kafka: config.KafkaConfig{
 					Brokers: []string{},
 					Topic:   "test-topic",
 				},
-			},
-			expectError: true,
-		},
-	}
+			}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if tt.expectError && err == nil {
-				t.Errorf("Expected validation error, but got none")
-			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Expected no validation error, but got: %v", err)
-			}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("kafka brokers are required"))
 		})
-	}
-}
+	})
 
-func TestIsClowderEnabled(t *testing.T) {
-	cfg := &Config{}
-	if cfg.IsClowderEnabled() {
-		t.Error("Expected Clowder to be disabled")
-	}
-}
+	Context("With missing kafka topic", func() {
+		It("should return validation error", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
+					Endpoint:  "localhost:9000",
+					AccessKey: "test-key",
+					SecretKey: "test-secret",
+				},
+				Kafka: config.KafkaConfig{
+					Brokers: []string{"localhost:9092"},
+					Topic:   "",
+				},
+			}
+
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("kafka topic is required"))
+		})
+	})
+
+	Context("With auth enabled but missing JWT secret", func() {
+		It("should return validation error", func() {
+			cfg := &config.Config{
+				Storage: config.StorageConfig{
+					Endpoint:  "localhost:9000",
+					AccessKey: "test-key",
+					SecretKey: "test-secret",
+				},
+				Kafka: config.KafkaConfig{
+					Brokers: []string{"localhost:9092"},
+					Topic:   "test-topic",
+				},
+				Auth: config.AuthConfig{
+					Enabled:   true,
+					JWTSecret: "",
+				},
+			}
+
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("JWT secret is required when auth is enabled"))
+		})
+	})
+})
+
+var _ = Describe("Clowder Configuration", func() {
+	It("should return false when Clowder is not enabled", func() {
+		cfg := &config.Config{}
+		Expect(cfg.IsClowderEnabled()).To(BeFalse())
+	})
+})

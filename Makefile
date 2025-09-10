@@ -70,10 +70,10 @@ test-coverage: test ## Run tests and generate coverage report
 mocks: install-tools ## Generate mocks for testing
 	@echo "Ensuring mocks exist..."
 	@mkdir -p internal/auth/mocks
-	@if [ ! -f internal/auth/mocks/mock_auth_client.go ]; then \
+	@if [ ! -f internal/auth/mocks/mock_k8s_auth.go ]; then \
 		echo "Generating mocks with go generate..."; \
-		cd internal/auth/mocks/ && \
-		GOMOD=$$(pwd)/../../../go.mod go generate -mod=mod ./generate.go  || \
+		cd internal/auth/ && \
+		GOFLAGS=-mod=mod go generate ./generate.go || \
 		echo "Mocks already present or generation failed - using existing mocks"; \
 	fi
 	@echo "Mocks ready in internal/auth/mocks/"
@@ -81,7 +81,7 @@ mocks: install-tools ## Generate mocks for testing
 .PHONY: clean-mocks
 clean-mocks: ## Remove generated mocks
 	@echo "Cleaning generated mocks..."
-	rm -f internal/auth/mocks/mock_auth_client.go
+	rm -f internal/auth/mocks/mock_k8s_auth.go
 	@echo "Mocks cleaned"
 
 .PHONY: build

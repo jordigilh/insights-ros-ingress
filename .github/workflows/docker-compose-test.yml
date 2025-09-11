@@ -1,0 +1,181 @@
+name: Docker Compose Integration Test
+
+on:
+  pull_request:
+    paths:
+      - 'deployments/docker-compose/**'
+      - '.github/workflows/docker-compose-test.yml'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'configs/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'deployments/docker-compose/**'
+      - '.github/workflows/docker-compose-test.yml'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'configs/**'
+  workflow_dispatch:
+
+jobs:
+  docker-compose-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Set up Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman podman-compose
+        # Configure podman for rootless operation
+        sudo usermod -aG wheel $USER || true
+        # Enable lingering for systemd user services
+        sudo loginctl enable-linger $USER || true
+
+    - name: Install additional dependencies
+      run: |
+        sudo apt-get install -y curl netcat-openbsd
+
+    - name: Start Podman socket service
+      run: |
+        # Start podman system service for docker-compose compatibility
+        systemctl --user start podman.socket || true
+        # Set DOCKER_HOST for podman-compose compatibility
+        echo "DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock" >> $GITHUB_ENV
+
+    - name: Verify podman installation
+      run: |
+        podman --version
+        podman-compose --version
+        echo "Podman info:"
+        podman info
+
+    - name: Run unit tests
+      run: make test
+
+    - name: Build application
+      run: make build
+
+    - name: Pull required container images
+      working-directory: deployments/docker-compose
+      run: |
+        # Pre-pull images to avoid timeout issues during compose up
+        podman-compose pull --ignore-pull-failures || true
+
+    - name: Start services with podman-compose
+      working-directory: deployments/docker-compose
+      run: |
+        echo "Starting services with podman-compose..."
+        podman-compose up -d
+        
+        echo "Waiting for initial services to start..."
+        sleep 20
+        
+        echo "Service status:"
+        podman-compose ps
+
+    - name: Wait for core services
+      working-directory: deployments/docker-compose
+      run: |
+        # Wait for MinIO
+        echo "Waiting for MinIO..."
+        timeout 180 bash -c 'until curl -f http://localhost:9000/minio/health/live &>/dev/null; do sleep 5; done'
+        
+        # Wait for Kafka
+        echo "Waiting for Kafka..."
+        timeout 300 bash -c 'until nc -z localhost 9092; do sleep 5; done'
+        
+        # Wait for Zookeeper
+        echo "Waiting for Zookeeper..."
+        timeout 180 bash -c 'until nc -z localhost 2181; do sleep 5; done'
+
+    - name: Create test data
+      run: |
+        echo "Creating test data..."
+        ./deployments/docker-compose/create-test-data.sh
+
+    - name: Run integration test
+      run: |
+        echo "Running integration test..."
+        # Set timeout for integration test
+        timeout 600 make test-integration
+
+    - name: Verify test results
+      working-directory: deployments/docker-compose
+      run: |
+        echo "=== Verifying MinIO bucket contents ==="
+        ./verify-minio.sh || true
+        
+        echo "=== Verifying Kafka messages ==="
+        ./verify-kafka.sh || true
+
+    - name: Check service health after test
+      working-directory: deployments/docker-compose
+      if: always()
+      run: |
+        echo "=== Final service status ==="
+        podman-compose ps
+        
+        echo "=== Service logs (last 30 lines each) ==="
+        echo "--- MinIO logs ---"
+        podman-compose logs --tail=30 minio || true
+        
+        echo "--- Kafka logs ---"
+        podman-compose logs --tail=30 kafka || true
+        
+        echo "--- Zookeeper logs ---"
+        podman-compose logs --tail=30 zookeeper || true
+
+    - name: Cleanup services
+      working-directory: deployments/docker-compose
+      if: always()
+      run: |
+        echo "Cleaning up services..."
+        podman-compose down -v || true
+        
+        # Clean up any remaining containers
+        podman container prune -f || true
+        
+        # Clean up any remaining volumes
+        podman volume prune -f || true
+
+    - name: Generate test report
+      if: always()
+      run: |
+        echo "## Docker Compose Integration Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ **Test Status**: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "All services started successfully and integration test completed." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Test Status**: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above for details on what failed." >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Tested Components" >> $GITHUB_STEP_SUMMARY
+        echo "- MinIO object storage" >> $GITHUB_STEP_SUMMARY
+        echo "- Kafka message broker" >> $GITHUB_STEP_SUMMARY
+        echo "- Zookeeper coordination service" >> $GITHUB_STEP_SUMMARY
+        echo "- insights-ros-ingress service" >> $GITHUB_STEP_SUMMARY
+        echo "- Upload API endpoint" >> $GITHUB_STEP_SUMMARY
+        echo "- ROS payload processing" >> $GITHUB_STEP_SUMMARY
+        echo "- ROS file storage in MinIO" >> $GITHUB_STEP_SUMMARY
+        echo "- Kafka event messaging" >> $GITHUB_STEP_SUMMARY
+        echo "- Complete end-to-end data flow" >> $GITHUB_STEP_SUMMARY

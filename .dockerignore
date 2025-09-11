@@ -1,0 +1,58 @@
+# Ignore files for optimal container builds
+
+# Build artifacts
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Development files
+.git/
+.gitignore
+.env
+.env.local
+*.log
+*.tmp
+
+# Documentation
+README.md
+docs/
+*.md
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Helm charts (built separately)
+deployments/
+
+# Scripts and development tools
+scripts/
+Makefile
+
+# Test data
+testdata/
+test/
+*_test.go
+
+# Local development
+vendor/
+.cache/

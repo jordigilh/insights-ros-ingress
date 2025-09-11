@@ -1,0 +1,87 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: |
+        go mod download
+        go mod verify
+        go mod tidy
+
+    - name: Run unit tests
+      run: make test
+
+    - name: Run go vet
+      run: make vet
+
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+    - name: Run linting
+      run: make lint
+
+    - name: Generate coverage report
+      run: make test-coverage
+
+    - name: Upload coverage to GitHub
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: coverage.html
+        retention-days: 30
+
+    - name: Build binary
+      run: make build
+
+    - name: Generate test report
+      if: always()
+      run: |
+        echo "## Unit Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ **Test Status**: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "All unit tests, linting, and build completed successfully." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Test Status**: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above for details on what failed." >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Checks Performed" >> $GITHUB_STEP_SUMMARY
+        echo "- Go module validation" >> $GITHUB_STEP_SUMMARY
+        echo "- Unit tests with race detection" >> $GITHUB_STEP_SUMMARY
+        echo "- Code linting (golangci-lint)" >> $GITHUB_STEP_SUMMARY
+        echo "- Static analysis (go vet)" >> $GITHUB_STEP_SUMMARY
+        echo "- Test coverage report" >> $GITHUB_STEP_SUMMARY
+        echo "- Binary build verification" >> $GITHUB_STEP_SUMMARY

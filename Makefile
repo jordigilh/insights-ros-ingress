@@ -1,0 +1,303 @@
+# Insights ROS Ingress Makefile
+# Following CLAUDE.md guidelines for using podman instead of docker
+
+# Variables
+APP_NAME := insights-ros-ingress
+VERSION ?= latest
+IMAGE_NAME := $(APP_NAME):$(VERSION)
+REGISTRY ?= quay.io/insights-onprem
+
+# Go variables
+GO_VERSION := 1.21
+GOOS ?= linux
+GOARCH ?= amd64
+CGO_ENABLED ?= 1
+
+# Build directories
+BUILD_DIR := build
+BIN_DIR := $(BUILD_DIR)/bin
+
+# Go flags
+LDFLAGS := -w -s -X main.version=$(VERSION)
+GO_BUILD_FLAGS := -ldflags "$(LDFLAGS)"
+
+.PHONY: help
+help: ## Display this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+.PHONY: clean
+clean: clean-mocks ## Clean build artifacts
+	@echo "Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR)
+	podman rmi $(IMAGE_NAME) 2>/dev/null || true
+
+.PHONY: deps
+deps: ## Download and verify dependencies
+	@echo "Downloading dependencies..."
+	go mod download
+	go mod verify
+	go mod tidy
+
+.PHONY: fmt
+fmt: ## Format Go code
+	@echo "Formatting Go code..."
+	go fmt ./...
+	goimports -w .
+
+.PHONY: lint
+lint: ## Run linters
+	@echo "Running linters..."
+	golangci-lint run ./...
+
+.PHONY: vet
+vet: ## Run go vet
+	@echo "Running go vet..."
+	go vet ./...
+
+.PHONY: test
+test: mocks ## Run tests
+	@echo "Running tests..."
+	go test -v -race -coverprofile=coverage.out ./...
+
+.PHONY: test-coverage
+test-coverage: test ## Run tests and generate coverage report
+	@echo "Generating coverage report..."
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+.PHONY: mocks
+mocks: install-tools ## Generate mocks for testing
+	@echo "Ensuring mocks exist..."
+	@mkdir -p internal/auth/mocks
+	@if [ ! -f internal/auth/mocks/mock_k8s_auth.go ]; then \
+		echo "Generating mocks with go generate..."; \
+		cd internal/auth/ && \
+		GOFLAGS=-mod=mod go generate ./generate.go || \
+		echo "Mocks already present or generation failed - using existing mocks"; \
+	fi
+	@echo "Mocks ready in internal/auth/mocks/"
+
+.PHONY: clean-mocks
+clean-mocks: ## Remove generated mocks
+	@echo "Cleaning generated mocks..."
+	rm -f internal/auth/mocks/mock_k8s_auth.go
+	@echo "Mocks cleaned"
+
+.PHONY: build
+build: clean mocks deps  ## Build the binary
+	@echo "Building $(APP_NAME)..."
+	mkdir -p $(BIN_DIR)
+ifeq ($(CGO_ENABLED),1)
+	@echo "Building with CGO enabled for current platform..."
+	CGO_ENABLED=$(CGO_ENABLED) go build \
+		$(GO_BUILD_FLAGS) \
+		-o $(BIN_DIR)/$(APP_NAME) \
+		./cmd/$(APP_NAME)
+else
+	@echo "Building with CGO disabled for $(GOOS)/$(GOARCH)..."
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+		$(GO_BUILD_FLAGS) \
+		-o $(BIN_DIR)/$(APP_NAME) \
+		./cmd/$(APP_NAME)
+endif
+	@echo "Binary built: $(BIN_DIR)/$(APP_NAME)"
+
+
+.PHONY: image
+image: ## Build container image using podman
+	@echo "Building container image with podman..."
+	podman build --platform=linux/amd64 -t $(IMAGE_NAME) .
+	@echo "Image built: $(IMAGE_NAME)"
+
+.PHONY: image-arm64
+image-arm64: ## Build container image for arm64 architecture
+	@echo "Building container image for arm64..."
+	podman build --platform=linux/arm64 -t $(IMAGE_NAME)-arm64 .
+	@echo "ARM64 image built: $(IMAGE_NAME)-arm64"
+
+.PHONY: image-amd64
+image-amd64: ## Build container image for amd64 architecture
+	@echo "Building container image for amd64..."
+	podman build --platform=linux/amd64 -t $(IMAGE_NAME)-amd64 .
+	@echo "AMD64 image built: $(IMAGE_NAME)-amd64"
+
+.PHONY: image-push
+image-push: image ## Push container image to registry
+	@echo "Pushing image to registry..."
+	podman tag $(IMAGE_NAME) $(REGISTRY)/$(IMAGE_NAME)
+	podman push $(REGISTRY)/$(IMAGE_NAME)
+
+.PHONY: image-push-arm64
+image-push-arm64: image-arm64 ## Push ARM64 container image to registry
+	@echo "Pushing ARM64 image to registry..."
+	podman tag $(IMAGE_NAME)-arm64 $(REGISTRY)/$(IMAGE_NAME)-arm64
+	podman push $(REGISTRY)/$(IMAGE_NAME)-arm64
+
+.PHONY: image-push-amd64
+image-push-amd64: image-amd64 ## Push AMD64 container image to registry
+	@echo "Pushing AMD64 image to registry..."
+	podman tag $(IMAGE_NAME)-amd64 $(REGISTRY)/$(IMAGE_NAME)-amd64
+	podman push $(REGISTRY)/$(IMAGE_NAME)-amd64
+
+.PHONY: run
+run: build ## Run the application locally
+	@echo "Running $(APP_NAME)..."
+	./$(BIN_DIR)/$(APP_NAME)
+
+.PHONY: run-test
+run-test: build ## Run the application locally with test configuration
+	@echo "Running $(APP_NAME) with test configuration..."
+	@if [ -f configs/local-test.env ]; then \
+		export $$(cat configs/local-test.env | grep -v '^#' | xargs) && ./$(BIN_DIR)/$(APP_NAME); \
+	else \
+		echo "Test configuration not found. Run: make test-env-up first"; \
+		exit 1; \
+	fi
+
+.PHONY: run-dev
+run-dev: build ## Run the application locally with development configuration
+	@echo "Running $(APP_NAME) with development configuration..."
+	@if [ -f configs/local-dev.env ]; then \
+		export $$(cat configs/local-dev.env | grep -v '^#' | xargs) && ./$(BIN_DIR)/$(APP_NAME); \
+	else \
+		echo "Development configuration not found. Run: make dev-env-up first"; \
+		exit 1; \
+	fi
+
+.PHONY: dev-env-up
+dev-env-up: ## Start development environment with KIND cluster and podman-compose
+	@echo "Starting development environment..."
+	@echo "Setting up KIND cluster for authentication..."
+	chmod +x deployments/docker-compose/scripts/setup-dev-auth.sh
+	./deployments/docker-compose/scripts/setup-dev-auth.sh
+	@echo "Starting services with podman-compose..."
+	podman-compose -f deployments/docker-compose/docker-compose.yml up -d
+
+.PHONY: dev-env-down
+dev-env-down: ## Stop development environment and KIND cluster
+	@echo "Stopping development environment..."
+	podman-compose -f deployments/docker-compose/docker-compose.yml down
+	@echo "Stopping KIND cluster..."
+	-kind delete cluster --name insights-dev 2>/dev/null || true
+
+.PHONY: test-integration
+test-integration: ## Run end-to-end integration test
+	@echo "Running integration test..."
+	chmod +x deployments/docker-compose/test-integration.sh
+	./deployments/docker-compose/test-integration.sh
+
+.PHONY: test-integration-quick
+test-integration-quick: dev-env-up ## Quick integration test (assumes services are running)
+	@echo "Running quick integration test..."
+	@sleep 5
+	@export $$(cat configs/local-test.env | grep -v '^#' | xargs) && \
+		./build/bin/$(APP_NAME) &
+	@SERVICE_PID=$$! && \
+		sleep 3 && \
+		curl -X POST \
+			-H "Content-Type: application/octet-stream" \
+			-H "x-rh-identity: $$(echo '{"identity":{"account_number":"12345","org_id":"12345","type":"User"}}' | base64 -w 0)" \
+			--data-binary "@deployments/docker-compose/test-data/test-payload.tar.gz" \
+			"http://localhost:8080/api/ingress/v1/upload?request_id=test-$$(date +%s)" || true && \
+		kill $$SERVICE_PID
+
+.PHONY: test-data
+test-data: ## Create test data for integration testing
+	@echo "Creating test data..."
+	./deployments/docker-compose/create-test-data.sh
+
+.PHONY: verify-kafka
+verify-kafka: ## Verify Kafka messages and topics
+	@echo "Verifying Kafka setup..."
+	./deployments/docker-compose/verify-kafka.sh
+
+.PHONY: verify-minio
+verify-minio: ## Verify MinIO uploads and ROS data
+	@echo "Verifying MinIO setup..."
+	./deployments/docker-compose/verify-minio.sh
+
+.PHONY: monitor-kafka
+monitor-kafka: ## Monitor Kafka topics in real-time
+	@echo "Monitoring Kafka topics (press Ctrl+C to stop)..."
+	./deployments/docker-compose/verify-kafka.sh monitor
+
+.PHONY: install-tools
+install-tools: ## Install required development tools
+	@echo "Installing development tools..."
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "Installing golangci-lint..."; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.54.2; \
+	}
+	@command -v goimports >/dev/null 2>&1 || { \
+		echo "Installing goimports..."; \
+		go install golang.org/x/tools/cmd/goimports@latest; \
+	}
+	@command -v mockgen >/dev/null 2>&1 || { \
+		echo "Installing mockgen..."; \
+		go install github.com/golang/mock/mockgen@latest; \
+	}
+
+.PHONY: helm-lint
+helm-lint: ## Lint Helm chart
+	@echo "Linting Helm chart..."
+	helm lint deployments/kubernetes/helm/$(APP_NAME)
+
+.PHONY: helm-template
+helm-template: ## Generate Helm templates
+	@echo "Generating Helm templates..."
+	helm template $(APP_NAME) deployments/kubernetes/helm/$(APP_NAME) --values deployments/kubernetes/helm/$(APP_NAME)/values.yaml
+
+.PHONY: helm-package
+helm-package: helm-lint ## Package Helm chart
+	@echo "Packaging Helm chart..."
+	helm package deployments/kubernetes/helm/$(APP_NAME) -d $(BUILD_DIR)
+
+.PHONY: security-scan
+security-scan: ## Run security scan on container image
+	@echo "Running security scan..."
+	podman run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		-v $$(pwd):/root/.cache/ \
+		aquasec/trivy:latest image $(IMAGE_NAME)
+
+.PHONY: check
+check: fmt vet lint test ## Run all checks (format, vet, lint, test)
+
+.PHONY: ci
+ci: install-tools check build image helm-lint ## Run CI pipeline
+
+.PHONY: all
+all: check build image helm-package ## Build everything
+
+# Development helpers
+.PHONY: watch
+watch: ## Watch for changes and rebuild
+	@echo "Watching for changes..."
+	@command -v entr >/dev/null 2>&1 || { \
+		echo "entr is required for watch. Install with: brew install entr"; \
+		exit 1; \
+	}
+	find . -name "*.go" | entr -r make build run
+
+.PHONY: debug
+debug: ## Build and run with debugging
+	@echo "Building debug version..."
+	CGO_ENABLED=1 go build -gcflags="all=-N -l" -o $(BIN_DIR)/$(APP_NAME)-debug ./cmd/$(APP_NAME)
+	dlv exec $(BIN_DIR)/$(APP_NAME)-debug
+
+# OpenShift deployment helpers
+.PHONY: oc-deploy
+oc-deploy: image helm-package ## Deploy to OpenShift
+	@echo "Deploying to OpenShift..."
+	oc project insights-ros || oc new-project insights-ros
+	helm upgrade --install $(APP_NAME) deployments/kubernetes/helm/$(APP_NAME) \
+		--set image.repository=$(REGISTRY)/$(APP_NAME) \
+		--set image.tag=$(VERSION)
+
+.PHONY: oc-undeploy
+oc-undeploy: ## Remove from OpenShift
+	@echo "Removing from OpenShift..."
+	helm uninstall $(APP_NAME) || true
+
+# Default target
+.DEFAULT_GOAL := help

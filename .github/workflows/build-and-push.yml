@@ -1,0 +1,136 @@
+name: Build and Push Container Image
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build-and-push.yml'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'configs/**'
+  pull_request:
+    branches: [ main ]
+    types: [ closed ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Custom tag for the image (optional)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  REGISTRY: quay.io
+  IMAGE_NAME: insights-onprem/insights-ros-ingress
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run tests
+        run: make test
+
+      - name: Run linting
+        run: |
+          # Install golangci-lint if not present
+          if ! command -v golangci-lint &> /dev/null; then
+            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+            echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          fi
+          make lint
+
+      - name: Build application
+        run: make build
+
+      - name: Log in to Quay.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event.inputs.tag != '' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build container image
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          containerfiles: |
+            ./Dockerfile
+          archs: amd64,arm64
+
+      - name: Push container image to registry
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Generate build summary
+        run: |
+          echo "## Container Image Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Build Status**: SUCCESS" >> $GITHUB_STEP_SUMMARY
+          echo "🔧 **Build Tool**: Buildah" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Built Images" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository**: \`${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: \`${{ steps.build-image.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tags" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.build-image.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Platforms" >> $GITHUB_STEP_SUMMARY
+          echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY
+          echo "- linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage" >> $GITHUB_STEP_SUMMARY
+          echo "Pull the image with:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

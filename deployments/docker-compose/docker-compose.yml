@@ -1,0 +1,120 @@
+# Development environment with MinIO and Kafka using podman-compose
+# Following CLAUDE.md guidelines for using podman-compose
+
+version: '3.8'
+
+services:
+  # MinIO for S3-compatible storage
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: insights-ros-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_CONSOLE_ADDRESS: ":9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Create MinIO bucket
+  minio-setup:
+    image: quay.io/minio/mc:latest
+    container_name: insights-ros-minio-setup
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      /usr/bin/mc mb myminio/insights-ros-data --ignore-existing;
+      /usr/bin/mc policy set public myminio/insights-ros-data;
+      echo 'MinIO bucket setup complete';
+      "
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: quay.io/strimzi/kafka:latest-kafka-2.8.1
+    container_name: insights-ros-zookeeper
+    command: [
+      "sh", "-c",
+      "bin/zookeeper-server-start.sh config/zookeeper.properties"
+    ]
+    ports:
+      - "2181:2181"
+    environment:
+      LOG_DIR: /tmp/logs
+    volumes:
+      - zk_data:/tmp/kafka-logs
+
+  # Kafka for messaging
+  kafka:
+    image: quay.io/strimzi/kafka:latest-kafka-2.8.1
+    container_name: insights-ros-kafka
+    command: [
+      "sh", "-c",
+      "bin/kafka-server-start.sh config/server.properties --override listeners=$${KAFKA_LISTENERS} --override advertised.listeners=$${KAFKA_ADVERTISED_LISTENERS} --override zookeeper.connect=$${KAFKA_ZOOKEEPER_CONNECT}"
+    ]
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      LOG_DIR: "/tmp/logs"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - kafka_data:/tmp/kafka-logs
+
+  # Create Kafka topics
+  kafka-setup:
+    image: quay.io/strimzi/kafka:latest-kafka-2.8.1
+    container_name: insights-ros-kafka-setup
+    depends_on:
+      - kafka
+    command: >
+      bash -c "
+      echo 'Waiting for Kafka to be ready...';
+      sleep 45;
+      echo 'Creating Kafka topics...';
+      bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic hccm.ros.events;
+      bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic platform.upload.validation;
+      echo 'Kafka topics created successfully';
+      "
+
+  # PostgreSQL for testing (optional)
+  postgres:
+    image: quay.io/insights-onprem/postgresql:16
+    container_name: insights-ros-postgres
+    ports:
+      - "5432:5432"
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: insights123
+      POSTGRES_USER: insights
+      POSTGRES_DB: insights_ros
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/pgsql/data
+
+volumes:
+  minio_data:
+    driver: local
+  zk_data:
+    driver: local
+  kafka_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: insights-ros-network

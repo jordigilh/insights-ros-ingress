@@ -8,10 +8,11 @@ IMAGE_NAME := $(APP_NAME):$(VERSION)
 REGISTRY ?= quay.io/insights-onprem
 
 # Go variables
-GO_VERSION := 1.21
+GO_VERSION := 1.24
 GOOS ?= linux
 GOARCH ?= amd64
 CGO_ENABLED ?= 1
+
 
 # Build directories
 BUILD_DIR := build
@@ -226,8 +227,8 @@ monitor-kafka: ## Monitor Kafka topics in real-time
 install-tools: ## Install required development tools
 	@echo "Installing development tools..."
 	@command -v golangci-lint >/dev/null 2>&1 || { \
-		echo "Installing golangci-lint..."; \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.54.2; \
+		echo "Installing latest golangci-lint..."; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin; \
 	}
 	@command -v goimports >/dev/null 2>&1 || { \
 		echo "Installing goimports..."; \

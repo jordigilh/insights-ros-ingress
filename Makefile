@@ -48,7 +48,7 @@ fmt: ## Format Go code
 .PHONY: lint
 lint: ## Run linters
 	@echo "Running linters..."
-	golangci-lint run ./...
+	golangci-lint run --modules-download-mode=mod --timeout=5m ./...
 
 .PHONY: vet
 vet: ## Run go vet

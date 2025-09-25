@@ -132,11 +132,6 @@ spec:
             - name: AUTH_ENABLED
               value: {{ .Values.auth.enabled | quote }}
             {{- if .Values.auth.enabled }}
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "insights-ros-ingress.authSecretName" . }}
-                  key: {{ .Values.auth.jwtSecretKey }}
             {{- if .Values.auth.allowedOrgs }}
             - name: AUTH_ALLOWED_ORGS
               value: {{ join "," .Values.auth.allowedOrgs | quote }}

@@ -87,12 +87,6 @@ Create storage secret name
 {{- default (printf "%s-storage" (include "insights-ros-ingress.fullname" .)) .Values.storage.existingSecret }}
 {{- end }}
 
-{{/*
-Create auth secret name
-*/}}
-{{- define "insights-ros-ingress.authSecretName" -}}
-{{- default (printf "%s-auth" (include "insights-ros-ingress.fullname" .)) .Values.auth.existingSecret }}
-{{- end }}
 
 {{/*
 Create kafka secret name

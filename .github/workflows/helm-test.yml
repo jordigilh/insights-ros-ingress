@@ -165,7 +165,7 @@ jobs:
           echo "Building insights-ros-ingress application..."
           mkdir -p build/bin
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags "-w -s -X main.version=latest" \
+            -mod=mod -ldflags "-w -s -X main.version=latest" \
             -o build/bin/insights-ros-ingress \
             ./cmd/insights-ros-ingress
         env:

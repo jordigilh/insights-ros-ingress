@@ -53,12 +53,12 @@ lint: ## Run linters
 .PHONY: vet
 vet: ## Run go vet
 	@echo "Running go vet..."
-	go vet ./...
+	go vet -mod=mod ./...
 
 .PHONY: test
 test: mocks ## Run tests
 	@echo "Running tests..."
-	go test -v -race -coverprofile=coverage.out ./...
+	go test -mod=mod -v -race -coverprofile=coverage.out ./...
 
 .PHONY: test-coverage
 test-coverage: test ## Run tests and generate coverage report
@@ -91,13 +91,13 @@ build: clean mocks deps  ## Build the binary
 ifeq ($(CGO_ENABLED),1)
 	@echo "Building with CGO enabled for current platform..."
 	CGO_ENABLED=$(CGO_ENABLED) go build \
-		$(GO_BUILD_FLAGS) \
+		-mod=mod $(GO_BUILD_FLAGS) \
 		-o $(BIN_DIR)/$(APP_NAME) \
 		./cmd/$(APP_NAME)
 else
 	@echo "Building with CGO disabled for $(GOOS)/$(GOARCH)..."
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		$(GO_BUILD_FLAGS) \
+		-mod=mod $(GO_BUILD_FLAGS) \
 		-o $(BIN_DIR)/$(APP_NAME) \
 		./cmd/$(APP_NAME)
 endif
@@ -282,7 +282,7 @@ watch: ## Watch for changes and rebuild
 .PHONY: debug
 debug: ## Build and run with debugging
 	@echo "Building debug version..."
-	CGO_ENABLED=1 go build -gcflags="all=-N -l" -o $(BIN_DIR)/$(APP_NAME)-debug ./cmd/$(APP_NAME)
+	CGO_ENABLED=1 go build -mod=mod -gcflags="all=-N -l" -o $(BIN_DIR)/$(APP_NAME)-debug ./cmd/$(APP_NAME)
 	dlv exec $(BIN_DIR)/$(APP_NAME)-debug
 
 # OpenShift deployment helpers

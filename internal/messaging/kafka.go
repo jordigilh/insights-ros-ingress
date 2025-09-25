@@ -51,13 +51,13 @@ type ValidationMessage struct {
 func NewKafkaProducer(cfg config.KafkaConfig) (*Producer, error) {
 	// Configure Kafka producer
 	kafkaConfig := kafka.ConfigMap{
-		"bootstrap.servers": strings.Join(cfg.Brokers, ","),
-		"client.id":         cfg.ClientID,
-		"acks":              "all",
-		"retries":           cfg.Retries,
-		"batch.size":        cfg.BatchSize,
-		"linger.ms":         5,
-		"compression.type":  "snappy",
+		"bootstrap.servers":  strings.Join(cfg.Brokers, ","),
+		"client.id":          cfg.ClientID,
+		"acks":               "all",
+		"retries":            cfg.Retries,
+		"batch.size":         cfg.BatchSize,
+		"linger.ms":          5,
+		"compression.type":   "snappy",
 		"enable.idempotence": true,
 	}
 
@@ -268,7 +268,7 @@ func (p *Producer) HealthCheck() error {
 	// Get metadata to verify connection
 	metadata, err := p.producer.GetMetadata(nil, false, 5000)
 	if err != nil {
-		return fmt.Errorf("Kafka health check failed: %w", err)
+		return fmt.Errorf("kafka health check failed: %w", err)
 	}
 
 	// Check if we can see any brokers

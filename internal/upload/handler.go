@@ -112,7 +112,11 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		h.respondError(w, http.StatusBadRequest, "File not found in request", requestLogger)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			h.logger.WithError(err).Error("Failed to close uploaded file")
+		}
+	}()
 
 	// Validate content type
 	contentType := fileHeader.Header.Get("Content-Type")
@@ -160,7 +164,9 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.WithError(err).Error("Failed to encode JSON response")
+	}
 
 	requestLogger.Info("Upload processed successfully")
 }
@@ -172,7 +178,11 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 	if err != nil {
 		return fmt.Errorf("failed to extract payload: %w", err)
 	}
-	defer extractedPayload.Cleanup()
+	defer func() {
+		if err := extractedPayload.Cleanup(); err != nil {
+			h.logger.WithError(err).Error("Failed to cleanup extracted payload")
+		}
+	}()
 
 	// Validate that we have ROS files to process
 	if len(extractedPayload.ROSFiles) == 0 {
@@ -195,7 +205,7 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 		// Get file info
 		fileInfo, err := rosFile.Stat()
 		if err != nil {
-			rosFile.Close()
+			_ = rosFile.Close() // Ignore error in cleanup path
 			return fmt.Errorf("failed to stat ROS file %s: %w", fileName, err)
 		}
 
@@ -221,7 +231,7 @@ func (h *Handler) processUpload(ctx context.Context, file io.Reader, requestID s
 
 		// Upload to storage
 		uploadResult, err := h.storageClient.Upload(ctx, uploadReq)
-		rosFile.Close()
+		_ = rosFile.Close() // Ignore error in cleanup path
 
 		if err != nil {
 			return fmt.Errorf("failed to upload ROS file %s: %w", fileName, err)
@@ -321,7 +331,9 @@ func (h *Handler) handleTestRequest(w http.ResponseWriter, _ *http.Request, requ
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.WithError(err).Error("Failed to encode JSON response")
+	}
 }
 
 func (h *Handler) extractIdentity(r *http.Request) (*identity.Identity, error) {
@@ -575,5 +587,7 @@ func (h *Handler) respondError(w http.ResponseWriter, statusCode int, message st
 	errorResponse := map[string]string{
 		"error": message,
 	}
-	json.NewEncoder(w).Encode(errorResponse)
+	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
+		h.logger.WithError(err).Error("Failed to encode JSON error response")
+	}
 }

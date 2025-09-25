@@ -11,10 +11,10 @@ import (
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status      string            `json:"status"`
-	Timestamp   time.Time         `json:"timestamp"`
-	Version     string            `json:"version"`
-	Checks      map[string]Check  `json:"checks"`
+	Status    string           `json:"status"`
+	Timestamp time.Time        `json:"timestamp"`
+	Version   string           `json:"version"`
+	Checks    map[string]Check `json:"checks"`
 }
 
 // Check represents an individual health check
@@ -103,7 +103,10 @@ func (c *Checker) Health(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Log error but continue - response already sent
+		println("Failed to encode health response:", err.Error())
+	}
 }
 
 // Ready handles the readiness probe endpoint
@@ -118,7 +121,10 @@ func (c *Checker) Ready(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Log error but continue - response already sent
+		println("Failed to encode health response:", err.Error())
+	}
 }
 
 // Metrics handles the metrics endpoint

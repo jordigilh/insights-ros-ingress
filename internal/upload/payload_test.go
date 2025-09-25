@@ -73,11 +73,11 @@ func (f *TestPayloadFactory) Build() ([]byte, error) {
 
 	// Create gzip writer
 	gzipWriter := gzip.NewWriter(&buf)
-	defer gzipWriter.Close()
+	defer func() { _ = gzipWriter.Close() }() // Ignore error in test cleanup
 
 	// Create tar writer
 	tarWriter := tar.NewWriter(gzipWriter)
-	defer tarWriter.Close()
+	defer func() { _ = tarWriter.Close() }() // Ignore error in test cleanup
 
 	// Add manifest.json if requested
 	if f.IncludeManifest {
@@ -188,8 +188,8 @@ func (f *TestPayloadFactory) Build() ([]byte, error) {
 	}
 
 	// Close writers to flush data
-	tarWriter.Close()
-	gzipWriter.Close()
+	_ = tarWriter.Close()  // Ignore error in test
+	_ = gzipWriter.Close() // Ignore error in test
 
 	return buf.Bytes(), nil
 }
@@ -218,7 +218,7 @@ var _ = Describe("PayloadExtractor", func() {
 				// Extract payload
 				result, err := extractor.ExtractPayload(bytes.NewReader(payload), "test-request-123")
 				Expect(err).ToNot(HaveOccurred())
-				defer result.Cleanup()
+				defer func() { _ = result.Cleanup() }() // Ignore error in test cleanup
 
 				// Verify results
 				expected := DefaultTestPayloadFactory()

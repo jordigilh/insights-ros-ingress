@@ -13,18 +13,18 @@ var _ = Describe("Configuration Loading", func() {
 	Context("When environment variables are set", func() {
 		BeforeEach(func() {
 			// Set required environment variables for testing
-			os.Setenv("STORAGE_ENDPOINT", "localhost:9000")
-			os.Setenv("STORAGE_ACCESS_KEY", "test-access-key")
-			os.Setenv("STORAGE_SECRET_KEY", "test-secret-key")
-			os.Setenv("AUTH_ENABLED", "false") // Disable auth for testing
+			_ = os.Setenv("STORAGE_ENDPOINT", "localhost:9000")
+			_ = os.Setenv("STORAGE_ACCESS_KEY", "test-access-key")
+			_ = os.Setenv("STORAGE_SECRET_KEY", "test-secret-key")
+			_ = os.Setenv("AUTH_ENABLED", "false") // Disable auth for testing
 		})
 
 		AfterEach(func() {
 			// Clean up environment variables
-			os.Unsetenv("STORAGE_ENDPOINT")
-			os.Unsetenv("STORAGE_ACCESS_KEY")
-			os.Unsetenv("STORAGE_SECRET_KEY")
-			os.Unsetenv("AUTH_ENABLED")
+			_ = os.Unsetenv("STORAGE_ENDPOINT")
+			_ = os.Unsetenv("STORAGE_ACCESS_KEY")
+			_ = os.Unsetenv("STORAGE_SECRET_KEY")
+			_ = os.Unsetenv("AUTH_ENABLED")
 		})
 
 		It("should load configuration successfully", func() {

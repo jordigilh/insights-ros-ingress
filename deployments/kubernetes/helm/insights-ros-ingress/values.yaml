@@ -95,7 +95,7 @@ kafka:
     existingSecret: ""
 
 
-# MinIO configuration  
+# MinIO configuration
 minio:
   image:
     repository: quay.io/minio/minio
@@ -119,19 +119,19 @@ config:
     writeTimeout: 30
     idleTimeout: 120
     debug: false
-  
+
   upload:
     maxUploadSize: 104857600
     maxMemory: 33554432
     tempDir: "/tmp"
     allowedTypes: "application/vnd.redhat.hccm.upload"
     requireAuth: true
-  
+
   logging:
     level: "info"
     format: "json"
     output: "stdout"
-  
+
   metrics:
     enabled: true
     path: "/metrics"
@@ -263,8 +263,6 @@ storage:
 auth:
   enabled: true
   allowedOrgs: []
-  existingSecret: "auth-credentials"
-  jwtSecretKey: "jwt-secret"
 
 # Upload configuration (used in deployment)
 upload:

@@ -68,8 +68,7 @@ var _ = Describe("Configuration Validation", func() {
 					Topic:   "test-topic",
 				},
 				Auth: config.AuthConfig{
-					Enabled:   false,
-					JWTSecret: "",
+					Enabled: false,
 				},
 			}
 
@@ -176,29 +175,6 @@ var _ = Describe("Configuration Validation", func() {
 		})
 	})
 
-	Context("With auth enabled but missing JWT secret", func() {
-		It("should return validation error", func() {
-			cfg := &config.Config{
-				Storage: config.StorageConfig{
-					Endpoint:  "localhost:9000",
-					AccessKey: "test-key",
-					SecretKey: "test-secret",
-				},
-				Kafka: config.KafkaConfig{
-					Brokers: []string{"localhost:9092"},
-					Topic:   "test-topic",
-				},
-				Auth: config.AuthConfig{
-					Enabled:   true,
-					JWTSecret: "",
-				},
-			}
-
-			err := cfg.Validate()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("JWT secret is required when auth is enabled"))
-		})
-	})
 })
 
 var _ = Describe("Clowder Configuration", func() {

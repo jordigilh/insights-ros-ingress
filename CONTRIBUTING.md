@@ -19,7 +19,7 @@ make install-tools
 
 # Or manually install:
 # golangci-lint
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
 
 # goimports
 go install golang.org/x/tools/cmd/goimports@latest
@@ -87,7 +87,7 @@ open coverage.html
 make build
 
 # Build container image (using podman)
-make image
+make build-image
 
 # Build everything
 make all
@@ -97,10 +97,10 @@ make all
 
 ```bash
 # Build image with podman
-make image
+make build-image
 
-
-make push-image
+# Push image to registry
+make build-image-push
 ```
 
 ## Submitting Changes

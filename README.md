@@ -65,7 +65,7 @@ The service uses Kubernetes ConfigMaps and Secrets for configuration, mimicking 
 make build
 
 # Build container image
-make image
+make build-image
 
 # Run tests
 make test

@@ -17,18 +17,18 @@ import (
 // Manifest represents the manifest.json structure from OCP payload
 // Based on koku's manifest parsing logic
 type Manifest struct {
-	UUID                       string            `json:"uuid"`
-	ClusterID                  string            `json:"cluster_id"`
-	ClusterAlias               string            `json:"cluster_alias,omitempty"`
-	Date                       time.Time         `json:"date"`
-	Start                      *time.Time        `json:"start,omitempty"`
-	End                        *time.Time        `json:"end,omitempty"`
-	Files                      []string          `json:"files"`
-	ResourceOptimizationFiles  []string          `json:"resource_optimization_files,omitempty"`
-	Certified                  bool              `json:"certified,omitempty"`
-	OperatorVersion            string            `json:"operator_version,omitempty"`
-	DailyReports               bool              `json:"daily_reports,omitempty"`
-	CRStatus                   map[string]interface{} `json:"cr_status,omitempty"`
+	UUID                      string                 `json:"uuid"`
+	ClusterID                 string                 `json:"cluster_id"`
+	ClusterAlias              string                 `json:"cluster_alias,omitempty"`
+	Date                      time.Time              `json:"date"`
+	Start                     *time.Time             `json:"start,omitempty"`
+	End                       *time.Time             `json:"end,omitempty"`
+	Files                     []string               `json:"files"`
+	ResourceOptimizationFiles []string               `json:"resource_optimization_files,omitempty"`
+	Certified                 bool                   `json:"certified,omitempty"`
+	OperatorVersion           string                 `json:"operator_version,omitempty"`
+	DailyReports              bool                   `json:"daily_reports,omitempty"`
+	CRStatus                  map[string]interface{} `json:"cr_status,omitempty"`
 }
 
 // PayloadExtractor handles extraction and processing of tar.gz payloads
@@ -39,10 +39,10 @@ type PayloadExtractor struct {
 
 // ExtractedPayload represents the extracted payload contents
 type ExtractedPayload struct {
-	Manifest    *Manifest
-	ROSFiles    map[string]string // filename -> file path
-	TempDir     string
-	RequestID   string
+	Manifest  *Manifest
+	ROSFiles  map[string]string // filename -> file path
+	TempDir   string
+	RequestID string
 }
 
 // NewPayloadExtractor creates a new payload extractor
@@ -62,8 +62,8 @@ func (pe *PayloadExtractor) ExtractPayload(payloadData io.Reader, requestID stri
 	}
 
 	pe.logger.WithFields(logrus.Fields{
-		"request_id":   requestID,
-		"extract_dir":  extractDir,
+		"request_id":  requestID,
+		"extract_dir": extractDir,
 	}).Debug("Starting payload extraction")
 
 	// Extract tar.gz content
@@ -109,7 +109,11 @@ func (pe *PayloadExtractor) extractTarGz(data io.Reader, destDir string) ([]stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() {
+		if err := gzReader.Close(); err != nil {
+			pe.logger.WithError(err).Warn("Failed to close gzip reader")
+		}
+	}()
 
 	// Create tar reader
 	tarReader := tar.NewReader(gzReader)
@@ -154,10 +158,14 @@ func (pe *PayloadExtractor) extractTarGz(data io.Reader, destDir string) ([]stri
 			}
 
 			if _, err := io.Copy(file, tarReader); err != nil {
-				file.Close()
+				if err := file.Close(); err != nil {
+					pe.logger.WithError(err).WithField("file_path", filePath).Warn("Failed to close file after copy error")
+				}
 				return nil, fmt.Errorf("failed to write file %s: %w", filePath, err)
 			}
-			file.Close()
+			if err := file.Close(); err != nil {
+				pe.logger.WithError(err).WithField("file_path", filePath).Warn("Failed to close file after write")
+			}
 
 			extractedFiles = append(extractedFiles, header.Name)
 
@@ -170,8 +178,8 @@ func (pe *PayloadExtractor) extractTarGz(data io.Reader, destDir string) ([]stri
 	}
 
 	pe.logger.WithFields(logrus.Fields{
-		"dest_dir":         destDir,
-		"extracted_count":  len(extractedFiles),
+		"dest_dir":        destDir,
+		"extracted_count": len(extractedFiles),
 	}).Debug("Extraction completed")
 
 	return extractedFiles, nil
@@ -214,9 +222,9 @@ func (pe *PayloadExtractor) findAndParseManifest(extractedFiles []string, extrac
 	}
 
 	pe.logger.WithFields(logrus.Fields{
-		"manifest_uuid":  manifest.UUID,
-		"cluster_id":     manifest.ClusterID,
-		"files_count":    len(manifest.Files),
+		"manifest_uuid":   manifest.UUID,
+		"cluster_id":      manifest.ClusterID,
+		"files_count":     len(manifest.Files),
 		"ros_files_count": len(manifest.ResourceOptimizationFiles),
 	}).Debug("Parsed manifest successfully")
 

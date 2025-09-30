@@ -47,7 +47,11 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to initialize messaging client")
 	}
-	defer messagingClient.Close()
+	defer func() {
+		if err := messagingClient.Close(); err != nil {
+			log.WithError(err).Error("Failed to close messaging client")
+		}
+	}()
 
 	// Initialize health checker
 	healthChecker := health.NewChecker(storageClient, messagingClient)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -73,11 +74,19 @@ func (f *TestPayloadFactory) Build() ([]byte, error) {
 
 	// Create gzip writer
 	gzipWriter := gzip.NewWriter(&buf)
-	defer gzipWriter.Close()
+	defer func() {
+		if err := gzipWriter.Close(); err != nil {
+			panic(fmt.Sprintf("Failed to close gzip writer: %v", err))
+		}
+	}()
 
 	// Create tar writer
 	tarWriter := tar.NewWriter(gzipWriter)
-	defer tarWriter.Close()
+	defer func() {
+		if err := tarWriter.Close(); err != nil {
+			panic(fmt.Sprintf("Failed to close tar writer: %v", err))
+		}
+	}()
 
 	// Add manifest.json if requested
 	if f.IncludeManifest {
@@ -188,8 +197,12 @@ func (f *TestPayloadFactory) Build() ([]byte, error) {
 	}
 
 	// Close writers to flush data
-	tarWriter.Close()
-	gzipWriter.Close()
+	if err := tarWriter.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close tar writer: %w", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
+	}
 
 	return buf.Bytes(), nil
 }
@@ -218,7 +231,11 @@ var _ = Describe("PayloadExtractor", func() {
 				// Extract payload
 				result, err := extractor.ExtractPayload(bytes.NewReader(payload), "test-request-123")
 				Expect(err).ToNot(HaveOccurred())
-				defer result.Cleanup()
+				defer func() {
+					if err := result.Cleanup(); err != nil {
+						GinkgoT().Logf("Failed to cleanup test payload: %v", err)
+					}
+				}()
 
 				// Verify results
 				expected := DefaultTestPayloadFactory()

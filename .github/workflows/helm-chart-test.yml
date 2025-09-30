@@ -48,6 +48,8 @@ jobs:
     timeout-minutes: 30
     env:
       CONTAINER_RUNTIME: podman
+      REGISTRY: quay.io/insights-onprem
+      IMAGE_NAME: insights-ros-ingress
 
     steps:
       - name: Checkout code
@@ -139,7 +141,7 @@ jobs:
 
           # Verify image was built
           echo "🔍 Verifying built image:"
-          podman images ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          podman images ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
 
           # Debug: Show Podman state
           echo "🔍 Podman storage info:"
@@ -149,8 +151,8 @@ jobs:
 
           # Verify specific image exists
           echo "🔍 Checking for target image:"
-          if ! podman images ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --format "{{.Repository}}:{{.Tag}}" | grep -q "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"; then
-            echo "❌ Image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest not found after build!"
+          if ! podman images ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test --format "{{.Repository}}:{{.Tag}}" | grep -q "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test"; then
+            echo "❌ Image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test not found after build!"
             echo "Available images:"
             podman images
             exit 1
@@ -160,18 +162,18 @@ jobs:
           echo "📦 Loading image into KIND control plane..."
           # Use archive method for reliable Podman to KIND image transfer
           echo "💾 Saving image to archive..."
-          podman save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest -o /tmp/insights-ros-ingress-latest.tar
+          podman save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test -o /tmp/insights-ros-ingress-test.tar
           echo "✅ Image saved to archive"
 
           # Verify archive was created
-          ls -la /tmp/insights-ros-ingress-latest.tar
+          ls -la /tmp/insights-ros-ingress-test.tar
 
           echo "📥 Loading archive into KIND cluster..."
-          kind load image-archive /tmp/insights-ros-ingress-latest.tar --name insights-ros-ingress-test-cluster
+          kind load image-archive /tmp/insights-ros-ingress-test.tar --name insights-ros-ingress-test-cluster
           echo "✅ Image loaded into KIND control plane"
 
           # Clean up the temporary tar file
-          rm -f /tmp/insights-ros-ingress-latest.tar
+          rm -f /tmp/insights-ros-ingress-test.tar
 
           # Verify the image is available in the KIND cluster
           kubectl get nodes -o wide
@@ -191,7 +193,7 @@ jobs:
           insights-ros-ingress:
             image:
               repository: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-              tag: latest
+              tag: test
               pullPolicy: Never
           EOF
 

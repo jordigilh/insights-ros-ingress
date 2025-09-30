@@ -168,11 +168,12 @@ download_latest_chart() {
 
     # Extract the tag name and download URL for the .tgz file
     local tag_name=$(echo "$latest_release" | jq -r '.tag_name')
-    local download_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | endswith(".tgz")) | .browser_download_url')
-    local filename=$(echo "$latest_release" | jq -r '.assets[] | select(.name | endswith(".tgz")) | .name')
+    # Select the "latest" .tgz file specifically
+    local download_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | contains("latest") and endswith(".tgz")) | .browser_download_url' | head -1)
+    local filename=$(echo "$latest_release" | jq -r '.assets[] | select(.name | contains("latest") and endswith(".tgz")) | .name' | head -1)
 
     if [ -z "$download_url" ] || [ "$download_url" = "null" ]; then
-        echo_error "No .tgz file found in the latest release ($tag_name)"
+        echo_error "No 'latest' .tgz file found in the latest release ($tag_name)"
         echo_info "Available assets:"
         echo "$latest_release" | jq -r '.assets[].name' | sed 's/^/  - /'
         rm -rf "$temp_dir"
@@ -671,40 +672,40 @@ run_health_checks() {
 
         # Test services via port-forwarding (OpenShift approach)
         echo_info "Testing services via port-forwarding (OpenShift approach)..."
-        
+
         # Test Ingress API via port-forward
         echo_info "Testing Ingress API via port-forward..."
         local ingress_pf_pid=""
         kubectl port-forward -n "$NAMESPACE" svc/ros-ocp-ingress 18080:8080 >/dev/null 2>&1 &
         ingress_pf_pid=$!
         sleep 3
-        
+
         if kill -0 "$ingress_pf_pid" 2>/dev/null && curl -f -s --connect-timeout 5 --max-time 10 http://localhost:18080/ready >/dev/null 2>&1; then
             echo_success "✓ Ingress API service is healthy (port-forward)"
         else
             echo_error "✗ Ingress API service is not responding (port-forward)"
             failed_checks=$((failed_checks + 1))
         fi
-        
+
         # Cleanup ingress port-forward
         if [ -n "$ingress_pf_pid" ] && kill -0 "$ingress_pf_pid" 2>/dev/null; then
             kill "$ingress_pf_pid" 2>/dev/null || true
         fi
-        
+
         # Test Kruize API via port-forward
         echo_info "Testing Kruize API via port-forward..."
         local kruize_pf_pid=""
         kubectl port-forward -n "$NAMESPACE" svc/ros-ocp-kruize 18081:8080 >/dev/null 2>&1 &
         kruize_pf_pid=$!
         sleep 3
-        
+
         if kill -0 "$kruize_pf_pid" 2>/dev/null && curl -f -s --connect-timeout 5 --max-time 10 http://localhost:18081/listPerformanceProfiles >/dev/null 2>&1; then
             echo_success "✓ Kruize API service is healthy (port-forward)"
         else
             echo_error "✗ Kruize API service is not responding (port-forward)"
             failed_checks=$((failed_checks + 1))
         fi
-        
+
         # Cleanup kruize port-forward
         if [ -n "$kruize_pf_pid" ] && kill -0 "$kruize_pf_pid" 2>/dev/null; then
             kill "$kruize_pf_pid" 2>/dev/null || true

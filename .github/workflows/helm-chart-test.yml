@@ -16,7 +16,7 @@ name: Helm Chart Quality Test
 on:
   pull_request:
     paths:
-      - 'deployment/kubernetes/scripts/**'
+      - 'deployments/kubernetes/scripts/**'
       - '.github/workflows/helm-chart-test*.yml'
       # Also run when application code changes since we now test the built code
       - 'cmd/**'
@@ -29,7 +29,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'deployment/kubernetes/scripts/**'
+      - 'deployments/kubernetes/scripts/**'
       - '.github/workflows/helm-chart-test*.yml'
       # Also run when application code changes since we now test the built code
       - 'cmd/**'
@@ -105,7 +105,7 @@ jobs:
       - name: Setup KIND cluster
         timeout-minutes: 15
         run: |
-          cd deployment/kubernetes/scripts
+          cd deployments/kubernetes/scripts
           export KIND_CLUSTER_NAME=${{ env.KIND_CLUSTER_NAME }}
           export HELM_RELEASE_NAME=${{ env.HELM_RELEASE_NAME }}
           export NAMESPACE=${{ env.NAMESPACE }}
@@ -180,7 +180,7 @@ jobs:
         timeout-minutes: 15
         run: |
           # Deploy Helm chart with local image overrides
-          cd deployment/kubernetes/scripts
+          cd deployments/kubernetes/scripts
           export KIND_CLUSTER_NAME=${{ env.KIND_CLUSTER_NAME }}
           export HELM_RELEASE_NAME=${{ env.HELM_RELEASE_NAME }}
           export NAMESPACE=${{ env.NAMESPACE }}
@@ -272,7 +272,7 @@ jobs:
       - name: Run Dataflow Test
         timeout-minutes: 15
         run: |
-          cd deployment/kubernetes/scripts
+          cd deployments/kubernetes/scripts
           export KIND_CLUSTER_NAME=${{ env.KIND_CLUSTER_NAME }}
           export HELM_RELEASE_NAME=${{ env.HELM_RELEASE_NAME }}
           export NAMESPACE=${{ env.NAMESPACE }}

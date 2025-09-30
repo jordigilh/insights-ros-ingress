@@ -13,18 +13,18 @@ var _ = Describe("Configuration Loading", func() {
 	Context("When environment variables are set", func() {
 		BeforeEach(func() {
 			// Set required environment variables for testing
-			os.Setenv("STORAGE_ENDPOINT", "localhost:9000")
-			os.Setenv("STORAGE_ACCESS_KEY", "test-access-key")
-			os.Setenv("STORAGE_SECRET_KEY", "test-secret-key")
-			os.Setenv("AUTH_ENABLED", "false") // Disable auth for testing
+			Expect(os.Setenv("STORAGE_ENDPOINT", "localhost:9000")).To(Succeed())
+			Expect(os.Setenv("STORAGE_ACCESS_KEY", "test-access-key")).To(Succeed())
+			Expect(os.Setenv("STORAGE_SECRET_KEY", "test-secret-key")).To(Succeed())
+			Expect(os.Setenv("AUTH_ENABLED", "false")).To(Succeed()) // Disable auth for testing
 		})
 
 		AfterEach(func() {
 			// Clean up environment variables
-			os.Unsetenv("STORAGE_ENDPOINT")
-			os.Unsetenv("STORAGE_ACCESS_KEY")
-			os.Unsetenv("STORAGE_SECRET_KEY")
-			os.Unsetenv("AUTH_ENABLED")
+			Expect(os.Unsetenv("STORAGE_ENDPOINT")).To(Succeed())
+			Expect(os.Unsetenv("STORAGE_ACCESS_KEY")).To(Succeed())
+			Expect(os.Unsetenv("STORAGE_SECRET_KEY")).To(Succeed())
+			Expect(os.Unsetenv("AUTH_ENABLED")).To(Succeed())
 		})
 
 		It("should load configuration successfully", func() {

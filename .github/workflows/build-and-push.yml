@@ -69,7 +69,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           containerfiles: |
             ./Dockerfile
-          archs: amd64,arm64
+          archs: amd64
 
       - name: Push container image to registry
         uses: redhat-actions/push-to-registry@v2
@@ -97,7 +97,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Platforms" >> $GITHUB_STEP_SUMMARY
           echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY
-          echo "- linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Usage" >> $GITHUB_STEP_SUMMARY
           echo "Pull the image with:" >> $GITHUB_STEP_SUMMARY

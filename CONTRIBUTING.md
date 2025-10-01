@@ -87,7 +87,7 @@ open coverage.html
 make build
 
 # Build container image (using podman)
-make image
+make build-image
 
 # Build everything
 make all
@@ -97,10 +97,10 @@ make all
 
 ```bash
 # Build image with podman
-make image
+make build-image
 
-
-make push-image
+# Push image to registry
+make build-image-push
 ```
 
 ## Submitting Changes

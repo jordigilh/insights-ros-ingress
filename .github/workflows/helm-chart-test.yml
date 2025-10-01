@@ -101,7 +101,7 @@ jobs:
       - name: Set up environment and Podman configuration
         run: |
           echo "KIND_CLUSTER_NAME=insights-ros-ingress-test-cluster" >> $GITHUB_ENV
-          echo "HELM_RELEASE_NAME=insights-ros-ingress-test" >> $GITHUB_ENV
+          echo "HELM_RELEASE_NAME=ros-ingress-test" >> $GITHUB_ENV
           echo "NAMESPACE=insights-ros-ingress-test" >> $GITHUB_ENV
 
       - name: Setup KIND cluster

@@ -19,7 +19,7 @@ make install-tools
 
 # Or manually install:
 # golangci-lint
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
 
 # goimports
 go install golang.org/x/tools/cmd/goimports@latest

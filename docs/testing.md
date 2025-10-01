@@ -282,6 +282,10 @@ make run-test
 
 ### GitHub Actions
 
+The project includes automated CI/CD workflows in `.github/workflows/`. See the actual workflow files for current implementation.
+
+Example workflow configuration:
+
 ```yaml
 name: Integration Tests
 on: [push, pull_request]
@@ -289,11 +293,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.24.4
+          go-version: '1.24.4'
       - name: Install Podman
         run: |
           sudo apt-get update

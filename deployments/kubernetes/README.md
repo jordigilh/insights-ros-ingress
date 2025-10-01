@@ -15,23 +15,20 @@ The Insights ROS Ingress service processes file uploads and validates them for t
 - **MinIO**: S3-compatible object storage for file storage
 - **Kafka**: Message streaming platform for event processing
 - **Zookeeper**: Coordination service required by Kafka
-- **Redis**: Caching layer (optional)
 
 ## Directory Structure
 
 ```
 deployments/kubernetes/
-├── helm/
-│   └── insights-ros-ingress/     # Helm chart for complete deployment
-│       ├── Chart.yaml            # Chart metadata
-│       ├── values.yaml           # Default configuration values
-│       ├── templates/            # Kubernetes manifest templates
-│       └── tests/                # Helm tests
 ├── scripts/
-│   ├── deploy-kind.sh           # KIND cluster deployment script
-│   └── test-k8s-dataflow.sh     # Kubernetes dataflow testing script
-└── README.md                    # This file
+│   ├── deploy-kind.sh              # KIND cluster deployment script
+│   ├── install-helm-chart.sh       # Helm chart installation (pulls from GitHub)
+│   ├── test-k8s-dataflow.sh        # Kubernetes dataflow testing script
+│   └── cleanup-kind-artifacts.sh   # Cleanup script for KIND
+└── README.md                       # This file
 ```
+
+**Note:** The Helm chart is maintained in a separate repository: [insights-onprem/ros-helm-chart](https://github.com/insights-onprem/ros-helm-chart)
 
 ## Quick Start
 
@@ -54,15 +51,20 @@ brew install kind kubectl helm podman
    ```bash
    ./deployments/kubernetes/scripts/deploy-kind.sh
    ```
+   
+   This script will:
+   - Create a KIND cluster if it doesn't exist
+   - Install the Helm chart from GitHub (pulls latest release automatically)
+   - Configure all necessary services
 
 2. **Check deployment status:**
    ```bash
-   ./deployments/kubernetes/scripts/deploy-kind.sh status
+   ./deployments/kubernetes/scripts/install-helm-chart.sh status
    ```
 
 3. **Run health checks:**
    ```bash
-   ./deployments/kubernetes/scripts/deploy-kind.sh health
+   ./deployments/kubernetes/scripts/install-helm-chart.sh health
    ```
 
 4. **Test the complete dataflow:**
@@ -80,44 +82,55 @@ After deployment, the following services are available:
   - Metrics: http://localhost:30080/metrics (requires auth)
   - Upload: http://localhost:30080/api/ingress/v1/upload
 
-- **MinIO Console**: http://localhost:30099
+- **MinIO Console**: http://localhost:32061
   - Username: `minioadmin`
   - Password: `minioadmin123`
 
-- **MinIO S3 API**: http://localhost:30091
+- **MinIO S3 API**: http://localhost:32061
 
 ## Configuration
 
 ### Helm Values
 
-The deployment can be customized by modifying `helm/insights-ros-ingress/values.yaml` or by providing override values:
+The Helm chart is pulled from GitHub. You can customize the deployment by providing a custom values file:
 
 ```bash
-helm upgrade --install insights-ros-ingress deployments/kubernetes/helm/insights-ros-ingress \
-  --namespace insights-ros-ingress \
-  --create-namespace \
-  --set image.tag="v1.2.3" \
-  --set replicaCount=3 \
-  --set minio.persistence.size=50Gi
+# Create a custom values file
+cat > my-values.yaml <<EOF
+image:
+  tag: v1.2.3
+replicaCount: 3
+minio:
+  persistence:
+    size: 50Gi
+EOF
+
+# Deploy with custom values
+VALUES_FILE=my-values.yaml ./deployments/kubernetes/scripts/install-helm-chart.sh
 ```
 
 ### Environment Variables
 
 Key environment variables for the deployment script:
 
-- `KIND_CLUSTER_NAME`: Name of the KIND cluster (default: `insights-ros-ingress-cluster`)
-- `HELM_RELEASE_NAME`: Name of the Helm release (default: `insights-ros-ingress`)
-- `NAMESPACE`: Kubernetes namespace (default: `insights-ros-ingress`)
-- `STORAGE_CLASS`: Storage class for persistent volumes (default: `standard`)
+- `HELM_RELEASE_NAME`: Name of the Helm release (default: `ros-ocp`)
+- `NAMESPACE`: Kubernetes namespace (default: `ros-ocp`)
+- `VALUES_FILE`: Path to custom values file (optional)
+- `USE_LOCAL_CHART`: Use local chart instead of GitHub release (default: `false`)
+- `LOCAL_CHART_PATH`: Path to local chart directory (default: `../helm/ros-ocp`)
 
 ### Image Configuration
 
-By default, the deployment uses the image `quay.io/insights-onprem/insights-ros-ingress:latest`. To use a different image:
+To use a custom image, create a values file:
 
 ```bash
-helm upgrade --install insights-ros-ingress deployments/kubernetes/helm/insights-ros-ingress \
-  --set image.repository="your-registry/insights-ros-ingress" \
-  --set image.tag="your-tag"
+cat > custom-image-values.yaml <<EOF
+image:
+  repository: your-registry/insights-ros-ingress
+  tag: your-tag
+EOF
+
+VALUES_FILE=custom-image-values.yaml ./deployments/kubernetes/scripts/install-helm-chart.sh
 ```
 
 ## Development Workflow
@@ -150,28 +163,38 @@ helm upgrade --install insights-ros-ingress deployments/kubernetes/helm/insights
 
 ### Updating the Deployment
 
-1. **Update the Helm chart:**
+1. **Update to latest Helm chart:**
    ```bash
-   helm upgrade insights-ros-ingress deployments/kubernetes/helm/insights-ros-ingress \
-     --namespace insights-ros-ingress \
-     --set image.tag="new-version"
+   # The script automatically pulls the latest chart from GitHub
+   ./deployments/kubernetes/scripts/install-helm-chart.sh
    ```
 
-2. **Rolling restart:**
+2. **Update with custom image version:**
    ```bash
-   kubectl rollout restart deployment insights-ros-ingress -n insights-ros-ingress
+   cat > update-values.yaml <<EOF
+   image:
+     tag: new-version
+   EOF
+   
+   VALUES_FILE=update-values.yaml ./deployments/kubernetes/scripts/install-helm-chart.sh
+   ```
+
+3. **Rolling restart:**
+   ```bash
+   kubectl rollout restart deployment -n ros-ocp -l app.kubernetes.io/instance=ros-ocp
    ```
 
 ## Testing
 
 ### Automated Testing
 
-The repository includes a GitHub Actions workflow that automatically tests the Helm chart on multiple Kubernetes versions:
+The repository includes GitHub Actions workflows (see `.github/workflows/`) that automatically:
 
-- Lints the Helm chart
-- Deploys to KIND clusters
-- Runs dataflow tests
-- Performs security scans
+- Run unit and integration tests
+- Build and push container images
+- Deploy to KIND clusters for testing
+- Run dataflow tests
+- Perform security scans
 
 ### Manual Testing
 
@@ -239,24 +262,27 @@ helm get values insights-ros-ingress -n insights-ros-ingress
 ### Remove Deployment
 
 ```bash
-# Remove Helm release only
-./deployments/kubernetes/scripts/deploy-kind.sh cleanup
+# Remove Helm release only (preserves PVs)
+./deployments/kubernetes/scripts/install-helm-chart.sh cleanup
+
+# Complete cleanup including Persistent Volumes
+./deployments/kubernetes/scripts/install-helm-chart.sh cleanup --complete
 
 # Remove entire KIND cluster
-./deployments/kubernetes/scripts/deploy-kind.sh cleanup --all
+kind delete cluster --name ros-ocp-cluster
 ```
 
 ### Manual Cleanup
 
 ```bash
 # Uninstall Helm release
-helm uninstall insights-ros-ingress -n insights-ros-ingress
+helm uninstall ros-ocp -n ros-ocp
 
 # Delete namespace
-kubectl delete namespace insights-ros-ingress
+kubectl delete namespace ros-ocp
 
 # Delete KIND cluster
-kind delete cluster --name insights-ros-ingress-cluster
+kind delete cluster --name ros-ocp-cluster
 ```
 
 ## Production Considerations

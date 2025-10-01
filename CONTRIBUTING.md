@@ -6,10 +6,10 @@ Thank you for your interest in contributing to the Insights ROS Ingress project!
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.24.4 or later
 - Podman 4.0 or later
 - Make
-- Helm 3.x (for chart development)
+- Helm 3.x (for Kubernetes deployment)
 
 ### Development Tools Installation
 
@@ -196,19 +196,18 @@ invalid tar.gz uploads to help with debugging.
 
 ## Deployment
 
-### Helm Chart Development
+### Helm Chart Deployment
 
-When modifying the Helm chart:
+The Helm chart is maintained in a separate repository: [insights-onprem/ros-helm-chart](https://github.com/insights-onprem/ros-helm-chart)
+
+To deploy using Helm:
 
 ```bash
-# Lint the chart
-make helm-lint
+# Deploy to Kubernetes/OpenShift using the installation script
+./deployments/kubernetes/scripts/install-helm-chart.sh
 
-# Generate templates for review
-make helm-template
-
-# Package the chart
-make helm-package
+# The script automatically downloads the latest chart from GitHub
+# Set USE_LOCAL_CHART=true to use a local chart if you have one
 ```
 
 ### OpenShift Deployment
@@ -216,11 +215,17 @@ make helm-package
 Test deployments on OpenShift:
 
 ```bash
-# Deploy to current OpenShift project
-make oc-deploy
+# Deploy to current OpenShift cluster (automatically detected)
+./deployments/kubernetes/scripts/install-helm-chart.sh
+
+# Check deployment status
+./deployments/kubernetes/scripts/install-helm-chart.sh status
+
+# Run health checks
+./deployments/kubernetes/scripts/install-helm-chart.sh health
 
 # Remove deployment
-make oc-undeploy
+./deployments/kubernetes/scripts/install-helm-chart.sh cleanup
 ```
 
 ## Security

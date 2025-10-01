@@ -35,11 +35,16 @@ make build
 make run
 ```
 
-### Using Helm on OpenShift
+### Using Helm on Kubernetes/OpenShift
+
+The Helm chart is pulled from the [ros-helm-chart](https://github.com/insights-onprem/ros-helm-chart) repository:
 
 ```bash
-# Deploy with Helm
-helm install insights-ros-ingress ./deployments/kubernetes/helm/insights-ros-ingress
+# Deploy using the installation script (recommended)
+./deployments/kubernetes/scripts/install-helm-chart.sh
+
+# Or manually with latest release from GitHub
+# The script automatically downloads and installs the latest chart
 ```
 
 ## Configuration
@@ -54,7 +59,7 @@ The service uses Kubernetes ConfigMaps and Secrets for configuration, mimicking 
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.24.4+
 - Podman 4.0+
 - Make
 

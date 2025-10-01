@@ -243,20 +243,20 @@ install-tools: ## Install required development tools
 		go install github.com/golang/mock/mockgen@latest; \
 	}
 
-.PHONY: helm-lint
-helm-lint: ## Lint Helm chart
-	@echo "Linting Helm chart..."
-	helm lint deployments/kubernetes/helm/$(APP_NAME)
+.PHONY: helm-install
+helm-install: ## Install Helm chart from GitHub repository
+	@echo "Installing Helm chart from GitHub repository..."
+	./deployments/kubernetes/scripts/install-helm-chart.sh
 
-.PHONY: helm-template
-helm-template: ## Generate Helm templates
-	@echo "Generating Helm templates..."
-	helm template $(APP_NAME) deployments/kubernetes/helm/$(APP_NAME) --values deployments/kubernetes/helm/$(APP_NAME)/values.yaml
+.PHONY: helm-status
+helm-status: ## Show Helm deployment status
+	@echo "Showing Helm deployment status..."
+	./deployments/kubernetes/scripts/install-helm-chart.sh status
 
-.PHONY: helm-package
-helm-package: helm-lint ## Package Helm chart
-	@echo "Packaging Helm chart..."
-	helm package deployments/kubernetes/helm/$(APP_NAME) -d $(BUILD_DIR)
+.PHONY: helm-cleanup
+helm-cleanup: ## Cleanup Helm deployment
+	@echo "Cleaning up Helm deployment..."
+	./deployments/kubernetes/scripts/install-helm-chart.sh cleanup
 
 .PHONY: security-scan
 security-scan: ## Run security scan on container image
@@ -269,10 +269,10 @@ security-scan: ## Run security scan on container image
 check: fmt vet lint test ## Run all checks (format, vet, lint, test)
 
 .PHONY: ci
-ci: install-tools check build build-image helm-lint ## Run CI pipeline
+ci: install-tools check build build-image ## Run CI pipeline
 
 .PHONY: all
-all: check build build-image helm-package ## Build everything
+all: check build build-image ## Build everything
 
 # Development helpers
 .PHONY: watch
@@ -292,17 +292,19 @@ debug: ## Build and run with debugging
 
 # OpenShift deployment helpers
 .PHONY: oc-deploy
-oc-deploy: build-image helm-package ## Deploy to OpenShift
+oc-deploy: build-image ## Deploy to OpenShift
 	@echo "Deploying to OpenShift..."
-	oc project insights-ros || oc new-project insights-ros
-	helm upgrade --install $(APP_NAME) deployments/kubernetes/helm/$(APP_NAME) \
-		--set image.repository=$(REGISTRY)/$(APP_NAME) \
-		--set image.tag=$(VERSION)
+	@echo "Creating custom values file for image override..."
+	@echo "image:" > /tmp/oc-deploy-values.yaml
+	@echo "  repository: $(REGISTRY)/$(APP_NAME)" >> /tmp/oc-deploy-values.yaml
+	@echo "  tag: $(VERSION)" >> /tmp/oc-deploy-values.yaml
+	NAMESPACE=insights-ros VALUES_FILE=/tmp/oc-deploy-values.yaml ./deployments/kubernetes/scripts/install-helm-chart.sh
+	@rm -f /tmp/oc-deploy-values.yaml
 
 .PHONY: oc-undeploy
 oc-undeploy: ## Remove from OpenShift
 	@echo "Removing from OpenShift..."
-	helm uninstall $(APP_NAME) || true
+	NAMESPACE=insights-ros ./deployments/kubernetes/scripts/install-helm-chart.sh cleanup
 
 # Default target
 .DEFAULT_GOAL := help

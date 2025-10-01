@@ -50,11 +50,9 @@ jobs:
 
       - name: Run linting
         run: |
-          # Install golangci-lint if not present
-          if ! command -v golangci-lint &> /dev/null; then
-            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
-            echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-          fi
+          # Install golangci-lint
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           make lint
 
       - name: Log in to Quay.io

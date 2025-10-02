@@ -12,9 +12,6 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'configs/**'
-  pull_request:
-    branches: [ main ]
-    types: [ closed ]
   workflow_dispatch:
     inputs:
       tag:
@@ -30,7 +27,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write

@@ -39,6 +39,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Run tests
+        run: make test
+
       - name: Log in to Quay.io
         uses: redhat-actions/podman-login@v1
         with:

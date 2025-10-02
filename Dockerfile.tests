@@ -1,0 +1,37 @@
+# Test Dockerfile following ros-ocp-backend patterns
+# Single-stage build for running tests in containerized environment
+FROM registry.access.redhat.com/ubi9/go-toolset:1.24
+
+WORKDIR /go/src/app
+COPY . .
+
+# Switch to root to install dependencies and run tests
+USER 0
+
+# Install golangci-lint for linting tests
+
+# Add Go bin to PATH
+ENV PATH="$PATH:$(go env GOPATH)/bin"
+
+# Set Go flags to use mod mode
+ENV GOFLAGS="-v -race -mod=mod -coverprofile=coverage.out"
+
+# Create test output directory and mock directories
+RUN mkdir -p /tmp/test-results internal/auth/mocks
+
+# Generate mocks if needed and run tests
+RUN echo "Ensuring mocks exist..." && \
+    if [ ! -f internal/auth/mocks/mock_k8s_auth.go ]; then \
+        echo "Generating mocks with go generate..." && \
+        cd internal/auth/ && \
+        go generate ./generate.go || \
+        echo "Mocks already present or generation failed - using existing mocks"; \
+    fi && \
+    echo "Mocks ready in internal/auth/mocks/"
+
+# Run tests during build - build will fail if tests fail
+RUN set -e && \
+    echo "Running tests..." && \
+    go test ${GOFLAGS} ./... || (echo "❌ TESTS FAILED - Build stopped" && exit 1)
+
+

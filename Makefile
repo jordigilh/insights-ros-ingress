@@ -64,12 +64,18 @@ vet: ## Run go vet
 	go vet ./...
 
 .PHONY: test
-test: mocks ## Run tests
-	@echo "Running tests..."
+test: ## Run tests in containerized environment
+	@echo "Running tests in containerized environment..."
+	podman build -f Dockerfile.tests -t $(APP_NAME):test .
+	@echo "✅ All tests passed in container!"
+
+.PHONY: test-local
+test-local: mocks ## Run tests locally (without container)
+	@echo "Running tests locally..."
 	go test -v -race -coverprofile=coverage.out ./...
 
 .PHONY: test-coverage
-test-coverage: test ## Run tests and generate coverage report
+test-coverage: test-local ## Run tests locally and generate coverage report
 	@echo "Generating coverage report..."
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"

@@ -81,7 +81,6 @@ type MetricsConfig struct {
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
 	Enabled     bool     `json:"enabled"`
-	JWTSecret   string   `json:"jwtSecret"`
 	AllowedOrgs []string `json:"allowedOrgs"`
 }
 
@@ -140,7 +139,6 @@ func Load() (*Config, error) {
 		},
 		Auth: AuthConfig{
 			Enabled:     getEnvBool("AUTH_ENABLED", true),
-			JWTSecret:   getEnvString("JWT_SECRET", ""),
 			AllowedOrgs: getEnvStringSlice("AUTH_ALLOWED_ORGS", []string{}),
 		},
 	}
@@ -169,11 +167,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Kafka.Topic == "" {
 		return fmt.Errorf("kafka topic is required")
-	}
-
-	// Auth validation
-	if c.Auth.Enabled && c.Auth.JWTSecret == "" {
-		return fmt.Errorf("JWT secret is required when auth is enabled")
 	}
 
 	return nil

@@ -99,7 +99,7 @@ cleanup_kind_artifacts() {
 
         # Remove project-related images
         echo_info "Cleaning up project-related images..."
-        "$DETECTED_RUNTIME" images --format "{{.Repository}}:{{.Tag}}" | grep -E "ros-ocp-backend|jordigilh" | while read -r image; do
+        "$DETECTED_RUNTIME" images --format "{{.Repository}}:{{.Tag}}" | grep -E "ros-ocp-backend" | while read -r image; do
             if [ -n "$image" ]; then
                 echo_info "Removing image: $image"
                 "$DETECTED_RUNTIME" rmi -f "$image" 2>/dev/null || true

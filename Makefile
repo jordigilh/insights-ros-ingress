@@ -66,8 +66,7 @@ vet: ## Run go vet
 .PHONY: test
 test: ## Run tests in containerized environment
 	@echo "Running tests in containerized environment..."
-	podman build -f Dockerfile.tests -t $(APP_NAME):test .
-	@echo "✅ All tests passed in container!"
+	podman build --no-cache -f Dockerfile.tests -t $(APP_NAME):test .
 
 .PHONY: test-local
 test-local: mocks ## Run tests locally (without container)

@@ -33,5 +33,5 @@ RUN echo "Ensuring mocks exist..." && \
 RUN set -e && \
     echo "Running tests..." && \
     go test ${GOFLAGS} ./... || (echo "❌ TESTS FAILED - Build stopped" && exit 1)
-
+RUN echo "✅ TESTS PASSED - Build completed"
 
